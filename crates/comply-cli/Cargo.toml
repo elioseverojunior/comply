@@ -1,0 +1,31 @@
+[package]
+authors.workspace = true
+categories = ["command-line-utilities"]
+description = "CLI for comply: REUSE compliance checking, annotation, and project management"
+documentation.workspace = true
+edition.workspace = true
+keywords = ["cli", "reuse", "license", "compliance", "spdx"]
+license.workspace = true
+name = "comply-cli"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+comply = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "comply"
+path = "src/main.rs"

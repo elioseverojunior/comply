@@ -1,0 +1,91 @@
+# Version control
+.git/
+.gitattributes
+.gitignore
+.gitmessage
+.gitleaks.toml
+
+# Build artifacts
+target/
+cobertura.xml
+lcov.info
+results.sarif
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv
+
+# Docs and license texts (root + subdirs)
+docs/
+**/*.md
+LICENSE*
+LICENSES/
+CC-BY-3.0.txt
+DCO.txt
+
+# CI/CD
+.github/
+
+# Scripts (not needed for Rust compilation)
+scripts/
+
+# Tests (not needed for compilation)
+tests/
+**/*_test.rs
+
+# Worktrees
+worktrees/
+
+# Config not needed for compilation
+.clippy.toml
+.editorconfig
+.mise.toml
+.rumdl.toml
+.rumdl_cache/
+.taplo.toml
+.yamllint
+Criterion.toml
+REUSE.toml
+cliff.toml
+commit-types.toml
+committed.toml
+deny.toml
+hk.pkl
+mise.toml
+opencode.json
+rustfmt.toml
+tarpaulin.toml
+tomlfmt.toml
+
+# Environment
+.env
+.env.*
+
+# Logs
+*.log
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Supply chain
+supply-chain/
+
+# CHANGELOG
+CHANGELOG.md
+
+# AI agent files
+AGENTS.md
+instructions.md

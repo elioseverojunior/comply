@@ -1,0 +1,41 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "instructions.md",
+    "docs/guidelines/contribution.md"
+  ],
+  "default_agent": "comply",
+  "agent": {
+    "comply": {
+      "description": "Autonomous development agent for comply - Rust LLM inference engine (llama.cpp port). TDD-first, CPU-primary, nightly Rust.",
+      "mode": "primary"
+    }
+  },
+  "command": {
+    "test": {
+      "description": "Run tests, optionally filtered by name: cargo test [$ARGUMENTS]",
+      "template": "cargo test $ARGUMENTS"
+    },
+    "lint": {
+      "description": "Run all linters in order: markdown fix, cargo fmt, cargo clippy",
+      "template": "mise run markdownlint:fix && cargo fmt && cargo clippy -- -D warnings"
+    },
+    "build": {
+      "description": "Build with cargo: cargo build [$ARGUMENTS]",
+      "template": "cargo build $ARGUMENTS"
+    }
+  },
+  "permission": {
+    "git commit *": "deny",
+    "git push *": "deny",
+    "gh pr create": "deny",
+    "gh pr comment": "deny",
+    "gh issue create": "deny",
+    "gh pr merge": "deny",
+    "rm *": "allow",
+    "git *": "ask",
+    "gh *": "ask",
+    "*": "allow"
+  }
+}

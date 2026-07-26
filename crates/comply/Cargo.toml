@@ -1,0 +1,32 @@
+[package]
+authors.workspace = true
+categories = ["development-tools", "licensing"]
+description = "REUSE compliance core library - SPDX parsing, header detection, license detection"
+documentation.workspace = true
+edition.workspace = true
+keywords = ["reuse", "spdx", "license", "compliance", "copyright"]
+license.workspace = true
+name = "comply"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+default = ["license-db-bundled"]
+license-db-bundled = []          # Bundle SPDX License List (all 727+ known IDs)
+license-db-network = []          # Fetch license list at runtime (NOT YET IMPLEMENTED)
+
+[dependencies]
+ignore = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

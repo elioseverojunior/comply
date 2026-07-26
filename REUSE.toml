@@ -1,0 +1,46 @@
+SPDX-FileCopyrightText = "2026 Elio Severo Junior <elioseverojunior@gmail.com> or <elio@elio.eti.br> and contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+SPDX-PackageDownloadLocation = "https://github.com/elioseverojunior/comply"
+SPDX-PackageName = "comply"
+SPDX-PackageSupplier = "COMPLY contributors"
+version = 1
+
+[[annotations]]
+SPDX-FileCopyrightText = "2026 Elio Severo Junior <elioseverojunior@gmail.com> or <elio@elio.eti.br> and contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+path = ["**"]
+precedence = "aggregate"
+
+[[annotations]]
+SPDX-License-Identifier = "MIT"
+path = ["DCO.txt"]
+precedence = "aggregate"
+
+[[annotations]]
+SPDX-FileCopyrightText = "COMPLY contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+path = [
+  "crates/comply/src/spdx_list.rs",
+  "crates/comply-cli/src/commands/annotate.rs",
+  "crates/comply-cli/src/commands/fix.rs",
+  "crates/comply-cli/src/commands/format.rs",
+  "crates/comply-cli/src/commands/init.rs",
+  "crates/comply-cli/src/commands/lint.rs",
+  "crates/comply-cli/src/commands.rs",
+  "crates/comply-cli/src/main.rs",
+  "crates/comply-cli/src/shared.rs",
+]
+precedence = "override"
+
+[[annotations]]
+SPDX-FileCopyrightText = "COMPLY contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+path = [
+  "crates/comply/src/config.rs",
+  "crates/comply/src/file.rs",
+  "crates/comply/src/fix.rs",
+  "crates/comply/src/header.rs",
+  "crates/comply/src/license.rs",
+  "crates/comply/src/report.rs",
+]
+precedence = "override"

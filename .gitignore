@@ -1,0 +1,31 @@
+### Ignored
+
+/target
+node_modules/
+
+/worktree/
+/.worktree/
+/worktrees/
+/.worktrees/
+
+### Always add
+!opencode.json
+
+# Claude Code project config. The global excludesfile ignores CLAUDE.md and
+# .claude/*, so these negations are required for the team-shared files to be
+# committable at all. settings.local.json stays ignored -- it is personal.
+!CLAUDE.md
+!.claude/**
+.claude/settings.local.json
+
+scripts/__pycache__/update-actions-pins.cpython-314.pyc
+
+# Editor artifacts
+/**/undefined/
+/**/cobertura.xml
+/**/lcov.info
+/**/build_rs_cov.profraw
+/**/results.sarif
+/comply
+/scorecard.json
+/mise.local.toml
