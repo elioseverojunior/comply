@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[toolchain]
+channel = "1.97"
+# `complete` is unusable on a release channel: it implies miri and
+# rustc-codegen-cranelift, which rustup publishes for nightly only, so the
+# installation fails with "some components are unavailable for download".
+# cargo-fuzz gets its own nightly toolchain via `mise run rustup:nightly`.
+# `minimal` rather than `default`: the two differ by rust-docs, which is 902 MB
+# of a 1.7 GB toolchain and is the offline copy of the std docs that docs.rs
+# serves. Nothing in CI opens it. Setting this on the action alone does not
+# work -- rustup honours the profile in this file for the toolchain this file
+# names, so `profile: minimal` there left rust-docs installed anyway.
+#
+# `rustup doc` is what this gives up locally. `rustup component add rust-docs`
+# restores it for anyone who wants it, without putting it back in every CI job.
+profile = "minimal"
+# `minimal` is rustc, cargo and rust-std, so everything else the gates use is
+# named here. llvm-tools is for coverage (`mise run llvm-cov`, tarpaulin
+# --engine llvm) and cargo-pgo; `default` would have supplied clippy and
+# rustfmt, and now does not.
+components = ["clippy", "llvm-tools", "rustfmt"]

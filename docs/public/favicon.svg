@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="comply">
+  <title>comply</title>
+  <!--
+    A document with a check: the whole job is confirming a file declares its
+    licensing. Drawn with currentColor-independent fills so it reads on both a
+    light and a dark browser tab.
+  -->
+  <rect width="32" height="32" rx="7" fill="#1f6f6b"/>
+  <path d="M11 7h6.5L23 12.5V25a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 10 25V8.5A1.5 1.5 0 0 1 11.5 7Z"
+        fill="#ffffff" fill-opacity="0.92"/>
+  <path d="M17.5 7 23 12.5h-4.5a1 1 0 0 1-1-1Z" fill="#0f3b39" fill-opacity="0.35"/>
+  <path d="m13.5 18.5 2.5 2.5 4.5-5" fill="none" stroke="#1f6f6b" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

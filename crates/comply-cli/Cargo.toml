@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+authors.workspace = true
+categories = ["command-line-utilities", "development-tools"]
+description = "Command-line tool for REUSE Specification compliance: lint, annotate, and fix SPDX license headers"
+documentation = "https://docs.rs/comply-cli"
+edition.workspace = true
+keywords = ["cli", "reuse", "license", "compliance", "spdx"]
+license.workspace = true
+name = "comply-cli"
+# Three binary targets mean `cargo run -p comply-cli` cannot pick one on
+# its own -- every mise task that shells out through it failed with
+# "could not determine which binary to run". `comply` is the command; the
+# others are aliases.
+default-run = "comply"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+comply = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "comply"
+path = "src/main.rs"

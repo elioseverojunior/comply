@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+authors.workspace = true
+categories = ["development-tools", "parser-implementations"]
+description = "Core library for REUSE Specification compliance: SPDX expression parsing, header detection, file classification, and license auditing"
+documentation = "https://docs.rs/comply"
+edition.workspace = true
+keywords = ["reuse", "spdx", "license", "compliance", "copyright"]
+license.workspace = true
+name = "comply"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# cargo-machete reads `src/` only, so a dependency used exclusively by `build.rs`
+# reads as unused. chrono is one: it stamps the build timestamp and nothing in
+# the library itself touches it.
+[package.metadata.cargo-machete]
+ignored = ["chrono"]
+
+[features]
+default = ["license-db-bundled"]
+license-db-bundled = [] # Bundle SPDX License List (all 727+ known IDs)
+license-db-network = [] # Fetch license list at runtime (NOT YET IMPLEMENTED)
+
+[dependencies]
+ignore = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+
+[build-dependencies]
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

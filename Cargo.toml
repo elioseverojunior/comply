@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[workspace]
+exclude = []
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+authors = ["Elio Severo Junior <elioseverojunior@gmail.com>"]
+# `categories`, `description`, `documentation` and `keywords` are deliberately
+# absent: they differ per crate, and an inherited empty value is worse than a
+# missing one -- crates.io rejects an empty description at publish time, but a
+# missing `workspace.package` key fails loudly at build time instead.
+edition = "2024"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/elioseverojunior/comply"
+rust-version = "1.95"
+version = "0.1.0-1"
+
+[workspace.lints.rust]
+rust_2018_idioms = { level = "warn", priority = -1 }
+unexpected_cfgs = "deny"
+unnameable_types = "warn"
+unreachable_pub = "warn"
+unsafe_code = "deny"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
+warnings = "deny"
+
+[workspace.lints.clippy]
+cargo = { level = "warn", priority = -1 }
+cargo_common_metadata = "allow"
+collapsible_if = "allow"
+expect_used = "warn"
+multiple_crate_versions = "allow"
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+redundant_pub_crate = "allow"
+unwrap_used = "warn"
+
+[workspace.dependencies]
+anyhow = { version = ">=1.0,<2.0.0" }
+chrono = { version = ">=0.4,<1.0.0", default-features = false, features = [
+  "now",
+  "std",
+] }
+clap = { version = ">=4.6,<5.0.0", features = ["derive"] }
+# `version` alongside `path`, and it must match `workspace.package.version`
+# above. `cargo package`/`cargo publish` strip `path` from the manifest they
+# upload and substitute the registry version, so a path-only dependency fails
+# with "all dependencies must have a version requirement specified when
+# packaging". `--no-verify` hid that until it was removed; the real publish would
+# have failed the same way.
+#
+# Cargo has no `version.workspace = true` for a dependency, so this is a second
+# copy of the version and has to be bumped with it.
+comply = { path = "crates/comply", version = "0.1.0-1" }
+comply-cli = { path = "crates/comply-cli", version = "0.1.0-1" }
+ignore = { version = ">=0.4,<1.0.0" }
+regex = { version = ">=1.13,<2.0.0" }
+serde = { version = ">=1.0,<2.0.0", features = ["derive"] }
+serde_json = { version = ">=1,<2.0.0" }
+sha1 = { version = ">=0.11,<1.0.0" }
+sha2 = { version = ">=0.11,<1.0.0" }
+tempfile = { version = ">=3.27,<4.0.0", features = [] }
+thiserror = { version = ">=2.0,<3.0.0" }
+toml = { version = ">=1.1,<2.0.0" }
+walkdir = { version = ">=2.5,<3.0.0" }
+# Pinned once so every crate that binds to JS/WASM shares one version.
+wasm-bindgen = { version = ">=0.2,<1" }

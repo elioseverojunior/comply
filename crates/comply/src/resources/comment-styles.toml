@@ -1,0 +1,209 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# The one place a built-in comment style is defined: its delimiters and what
+# maps to it. `kind` says which form to emit -- "line" repeats `open` on every
+# line; "block" brackets the header with `open`/`close` and leads each inner
+# line with `line`; "none" means no comment syntax exists, so a `.license`
+# companion is written instead. Naming it removes the old inference of "block"
+# from a non-empty `close`, which could not say a style meant both forms.
+
+[slash]
+kind = "line"
+open = "//"
+# `mts`/`cts` are the one deliberate step past the reference tool, which
+# rejects both: refusing to annotate a TypeScript file because of its module
+# suffix is a gap in that tool, not a rule of the specification.
+extensions = [
+  "rs",
+  "c",
+  "cpp",
+  "h",
+  "hpp",
+  "java",
+  "kt",
+  "kts",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "ts",
+  "tsx",
+  "mts",
+  "cts",
+  "go",
+  "swift",
+  "scala",
+  "zig",
+  "dart",
+  "cs",
+  "cc",
+  "cxx",
+  "hxx",
+  "php",
+  "proto",
+  "gradle",
+  "groovy",
+]
+filenames = ["Jenkinsfile"]
+
+[hash]
+extensions = [
+  "py",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "yaml",
+  "yml",
+  "toml",
+  "cfg",
+  "ini",
+  "conf",
+  "rb",
+  "pl",
+  "pm",
+  "r",
+  "tf",
+  "tfvars",
+  "hcl",
+  "ps1",
+  "psm1",
+  "psd1",
+  "ex",
+  "exs",
+  "nim",
+  "jl",
+  "nix",
+  "cmake",
+  "bzl",
+  "dockerfile",
+  "makefile",
+]
+filenames = [
+  "Dockerfile",
+  "Containerfile",
+  "Makefile",
+  "GNUmakefile",
+  "Gemfile",
+  "Rakefile",
+  "Vagrantfile",
+  "Brewfile",
+  "Podfile",
+  "CODEOWNERS",
+  "CMakeLists.txt",
+  ".gitignore",
+  ".gitattributes",
+  ".gitmodules",
+  ".dockerignore",
+  ".editorconfig",
+  ".yamllint",
+  ".bashrc",
+  ".zshrc",
+  ".profile",
+  ".bash_profile",
+]
+kind = "line"
+open = "#"
+
+[dash]
+extensions = ["sql", "ada", "lua", "hs", "lhs", "cabal", "elm"]
+kind = "line"
+open = "--"
+
+[semicolon]
+kind = "line"
+# `;;;` is the Lisp-family convention for a file-level comment, and is what
+# the reference tool emits -- not the single `;` the name suggests.
+extensions = ["lisp", "clj", "cljs", "cljc", "edn", "scm", "rkt", "el", "asm"]
+open = ";;;"
+
+[percent]
+kind = "line"
+open = "%"
+# `m` is MATLAB here rather than Objective-C, which is the call the reference
+# tool makes; a project that means the other one says so in its manifest.
+extensions = ["tex", "sty", "cls", "erl", "hrl", "m"]
+
+[asterisk-paren]
+close = "*)"
+extensions = ["ml", "mli", "pas", "pp"]
+kind = "block"
+line = " * "
+open = "(*"
+
+[slash-star]
+close = "*/"
+extensions = ["css", "scss", "sass", "less"]
+kind = "block"
+line = " * "
+open = "/*"
+
+[dot-dot]
+extensions = ["rst"]
+kind = "line"
+open = ".."
+
+[bang]
+extensions = ["f90", "f95", "f03", "f08"]
+kind = "line"
+open = "!"
+
+[rem]
+# `.cmd` is the same deliberate superset as `.mts`/`.cts` on `slash`: reuse
+# recognises `.bat` but not `.cmd`, and refusing a file whose interpreter
+# treats the two identically is a gap in that tool, not the specification.
+extensions = ["bat", "cmd"]
+kind = "line"
+open = "REM"
+
+[html]
+close = "-->"
+kind = "block"
+line = ""
+open = "<!--"
+# Markdown belongs here: the reference tool wraps its headers in `<!-- -->`
+# too, and a `#` prefix would render as a heading.
+extensions = [
+  "html",
+  "htm",
+  "xml",
+  "xhtml",
+  "md",
+  "markdown",
+  "vue",
+  "svelte",
+  "xsl",
+  "xslt",
+]
+
+[uncommentable]
+# `svg` belongs here rather than in `html`, even though SVG does support an XML
+# comment: `file/classify.rs` calls it `FileType::Binary`, and a style saying
+# otherwise sends it to the inline writer, which prepends at byte 0 -- above the
+# `<?xml ...?>` declaration, where XML allows nothing. reuse 6.2.0 agrees.
+extensions = [
+  "svg",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "ico",
+  "pdf",
+  "zip",
+  "tar",
+  "gz",
+  "o",
+  "so",
+  "dll",
+  "exe",
+  "bin",
+  "class",
+  "jar",
+  "ttf",
+  "otf",
+  "woff",
+  "woff2",
+]
+kind = "none"

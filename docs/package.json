@@ -1,0 +1,28 @@
+{
+  "name": "comply-docs",
+  "version": "0.1.0-1",
+  "private": true,
+  "description": "Documentation site for comply, a REUSE compliance tool in pure Rust",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "engines": {
+    "bun": "^1.3.14",
+    "node": "^24.0.0"
+  },
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "deps": "bunx --bun npm-check-updates -u --target minor && bun install",
+    "deps:check": "bunx --bun npm-check-updates --target minor",
+    "deps:latest": "bunx --bun npm-check-updates -u --target latest && bun install"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "mermaid": "^11.16.0",
+    "vitepress": "^1.6.4"
+  },
+  "trustedDependencies": [
+    "unrs-resolver"
+  ]
+}
