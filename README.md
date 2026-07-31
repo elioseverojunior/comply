@@ -73,15 +73,17 @@ cli wasm   mcp      lsp
  fix)
 ```
 
-Five crates under `crates/`:
+Two crates under `crates/`, plus two planned:
 
 | Crate | Role |
 |-------|------|
-| `comply` | Core library: SPDX parsing, header detection, license DB, REUSE.toml/DEP5 parsing |
-| `comply-cli` | CLI binary: init, format, lint, annotate, fix |
+| `comply` | The `comply` binary (init, format, lint, annotate, fix) and the library behind it: SPDX parsing, header detection, license DB, REUSE.toml/DEP5 parsing |
 | `comply-wasm` | WASM binary for browser-based compliance checking |
-| `comply-mcp` | MCP server for AI-assisted compliance |
-| `comply-lsp` | LSP server for IDE compliance feedback |
+| `comply-mcp` | PLANNED -- MCP server for AI-assisted compliance |
+| `comply-lsp` | PLANNED -- LSP server for IDE compliance feedback |
+
+The CLI lives behind the default-on `cli` feature. `default-features = false`
+gives the compliance engine alone, without clap, anyhow or chrono.
 
 ## Getting Started
 
@@ -126,16 +128,16 @@ cargo nextest run <filter>
 
 ```sh
 # Check a project for REUSE compliance
-cargo run -p comply-cli -- lint /path/to/project
+cargo run -p comply -- lint /path/to/project
 
 # Initialize REUSE structure in a project
-cargo run -p comply-cli -- init /path/to/project
+cargo run -p comply -- init /path/to/project
 
 # Annotate a file with SPDX header
-cargo run -p comply-cli -- annotate --license MIT --copyright "2026 Acme Inc" src/main.rs
+cargo run -p comply -- annotate --license MIT --copyright "2026 Acme Inc" src/main.rs
 
 # Format all SPDX headers consistently
-cargo run -p comply-cli -- format /path/to/project
+cargo run -p comply -- format /path/to/project
 ```
 
 ### Full Quality Gate

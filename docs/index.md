@@ -51,7 +51,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 ## Install
 
 ```sh
-cargo install comply-cli
+cargo install comply
 ```
 
 The binary is named `comply`.

@@ -14,10 +14,11 @@ reads the same configuration.
 ## Install
 
 ```sh
-cargo install comply-cli
+cargo install comply
 ```
 
-The crate is `comply-cli`; the binary it installs is `comply`.
+One crate, `comply`, carrying both the binary and the library. To use it as a
+library only, depend on it with `default-features = false`.
 
 To build from a checkout:
 

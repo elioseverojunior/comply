@@ -342,7 +342,7 @@ SPDX-FileCopyrightText: 2026 X
 SPDX-License-Identifier: MIT
 ```
 
-`crates/comply-cli/src/commands/fix.rs`'s
+`crates/comply/src/cli/commands/fix.rs`'s
 `fix_and_annotate_write_byte_identical_companions` test pins the two commands
 to each other so this cannot drift again.
 

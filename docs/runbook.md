@@ -16,11 +16,11 @@ The [REUSE Specification](https://reuse.software/spec/) defines a standard for d
 
 ```bash
 # From source (workspace)
-cargo build --release -p comply-cli
+cargo build --release -p comply
 ./target/release/comply --help
 
 # Or install via cargo
-cargo install --git https://github.com/elioseverojunior/comply --locked comply-cli
+cargo install --git https://github.com/elioseverojunior/comply --locked comply
 ```
 
 ## Quick Start
@@ -29,7 +29,7 @@ cargo install --git https://github.com/elioseverojunior/comply --locked comply-c
 
 ```bash
 # From the comply workspace
-cargo run -p comply-cli -- lint /path/to/your/project
+cargo run -p comply -- lint /path/to/your/project
 
 # Or if installed via cargo
 comply lint /path/to/your/project
@@ -382,7 +382,7 @@ flowchart TD
         DB --> DP["publish: push dist to gh-pages branch"]
     end
 
-    I --> L(["crates.io: comply, then comply-cli"])
+    I --> L(["crates.io: comply, then comply-wasm"])
     DP --> W(["elioseverojunior.github.io/comply"])
     I --> RS(["docs.rs/comply -- rustdoc, built automatically"])
 
@@ -431,8 +431,10 @@ source, so it published nothing and was removed.
    attach to, and the SLSA generator fails rather than skipping.
 4. **Confirm** -- `publish-crates` runs `cargo publish --workspace`, which
    resolves the order from the dependency graph: `comply` first, then
-   `comply-cli`. Authentication is short-lived OIDC via
-   `crates-io-auth-action`, so no long-lived registry token exists.
+   `comply-wasm`. Authentication is short-lived OIDC via
+   `crates-io-auth-action`, which mints one token scoped to every crate in this
+   repository that carries its own Trusted Publishing config -- a crate without
+   one is rejected even though the others succeed.
 
 ### Dry run
 

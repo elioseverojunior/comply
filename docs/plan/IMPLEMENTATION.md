@@ -28,21 +28,26 @@ coding (MCP).
 
 ## Crate architecture
 
-A virtual workspace under `crates/`. **3 crates exist today** -- `comply`,
-`comply-cli` and `comply-wasm`. `comply-mcp` and `comply-lsp` are PLANNED
-(Phases 6 and 5 below) and are not on disk; creating one is a new-subsystem
-change, so ask first.
+A virtual workspace under `crates/`. **2 crates exist today** -- `comply` and
+`comply-wasm`. `comply-mcp` and `comply-lsp` are PLANNED (Phases 6 and 5 below)
+and are not on disk; creating one is a new-subsystem change, so ask first.
+
+`comply` is one crate carrying two targets: the library (`src/lib.rs`) and the
+`comply` binary (`src/main.rs` plus `src/cli/`). It absorbed the former
+`comply-cli` crate -- see "One crate for the library and the binary" under Key
+design decisions.
 
 The tree below is the target layout, not a description of the checkout. Entries
-for the two planned crates, and `comply-cli/src/intelligent.rs`, describe work
-that has not been done.
+for the two planned crates, and `cli/intelligent.rs`, describe work that has not
+been done.
 
 ```text
 Cargo.toml                     # Virtual workspace root ([workspace] only)
 crates/
-  comply/                        # Core library (REUSE compliance engine)
+  comply/                        # REUSE compliance engine + the `comply` binary
+    build.rs                     # Build-time version/provenance stamp
     src/
-      lib.rs
+      lib.rs                     # Library root -- never declares `cli`
       spdx.rs                    # SPDX expression parsing and validation
       header.rs                  # SPDX header detection, parsing, generation
       license.rs                 # License detection, known license DB
@@ -51,15 +56,25 @@ crates/
       report.rs                  # Lint reports, BOM generation
       hash.rs                    # Integrity hashing (SHA256)
       error.rs                   # Error types
-  comply-cli/                    # CLI binary
-    src/
-      main.rs                    # Entrypoint + subcommand dispatch
-      init.rs                    # `comply init` - initialize project
-      format.rs                  # `comply format` - format SPDX headers
-      lint.rs                    # `comply lint` - check compliance
-      annotate.rs                # `comply annotate` - add/update headers
-      fix.rs                     # `comply fix` - auto-fix issues
-      intelligent.rs             # PLANNED -- AI-assisted compliance management
+      main.rs                    # Binary root -- entrypoint + subcommand dispatch
+      cli.rs                     # Binary-only module tree, gated by `cli`
+      cli/
+        shared.rs                # Root resolution, config loading, walking
+        output.rs                # Output format precedence (`Format::resolve`)
+        commands.rs
+        commands/
+          init.rs                # `comply init` - initialize project
+          format.rs              # `comply format` - format SPDX headers
+          lint.rs                # `comply lint` - check compliance
+          lint_file.rs           # `comply lint-file` - check named files
+          annotate.rs            # `comply annotate` - add/update headers
+          fix.rs                 # `comply fix` - auto-fix issues
+          download.rs            # `comply download` - fetch licence texts
+          spdx.rs                # `comply spdx` - SPDX 2.1 BOM
+          convert_dep5.rs        # `comply convert-dep5`
+          supported_licenses.rs  # `comply supported-licenses`
+          version.rs             # `comply version`
+        intelligent.rs           # PLANNED -- AI-assisted compliance management
   comply-wasm/                   # WASM target (browser)
     src/
       lib.rs                     # wasm-bindgen API surface
@@ -82,16 +97,19 @@ crates/
 ## Crate dependency graph
 
 ```text
-comply-lsp  comply-mcp  comply-wasm  comply-cli
-     \          |          /         /
-      \         |         /         /
-       comply (core library)
+comply-lsp  comply-mcp  comply-wasm      comply (bin target)
+     \          |          /                  |
+      \         |         /                   | same crate, `cli` feature
+       comply (core library) -----------------+
 ```
 
 `comply` is the sole library dependency for every other crate; each surface
 depends only on `comply` plus its own transport layer. Today that holds for
-`comply-cli` and `comply-wasm`; the MCP and LSP arms are the shape the two
-planned crates must take, not an existing edge.
+`comply-wasm`; the MCP and LSP arms are the shape the two planned crates must
+take, not an existing edge. The CLI is the one surface that is not a separate
+crate -- it is a second target inside `comply`, and it reaches the library the
+same way an external consumer does, through `use comply::...`, because a
+package's `main.rs` and `lib.rs` compile as separate crates.
 
 `comply-wasm` carries **no compliance logic**, deliberately.
 `wasm32-unknown-unknown` code never runs under the host test harness, so logic
@@ -106,8 +124,8 @@ reads as 0%.
 +-------------------------------------------------------+
 |  Surface layers                                       |
 |  +----------+  +----------+  +----------+  +--------+ |
-|  | comply-  |  | comply-  |  | comply-  |  |comply- | |
-|  | cli      |  | wasm     |  | mcp      |  | lsp    | |
+|  | comply   |  | comply-  |  | comply-  |  |comply- | |
+|  | src/cli  |  | wasm     |  | mcp      |  | lsp    | |
 |  +----------+  +----------+  +----------+  +--------+ |
 +-------------------------------------------------------+
 |  Core library (comply)                                |
@@ -135,7 +153,7 @@ reads as 0%.
 | `hash` | SHA256 file hashing for integrity checks. |
 | `error` | Typed error enum using `thiserror`. |
 
-### `comply-cli` (CLI binary)
+### `comply` binary target (`src/main.rs` + `src/cli/`)
 
 Subcommands mirror the Python reuse-tool for compatibility:
 
@@ -319,28 +337,28 @@ Key compatibility points:
 
 ### Phase 2 -- CLI (DONE)
 
-- `comply-cli lint` -- full lint implementation
-- `comply-cli annotate` -- annotation subcommand
-- `comply-cli init` -- project initialization
+- `comply lint` -- full lint implementation
+- `comply annotate` -- annotation subcommand
+- `comply init` -- project initialization
 - `REUSE.toml` / DEP5 parsing support
 - `.license` file support
 
 ### Phase 3 -- Format and Fix (DONE)
 
-- `comply-cli format` -- header formatting
-- `comply-cli fix` -- auto-fix implementation
+- `comply format` -- header formatting
+- `comply fix` -- auto-fix implementation
 - `comply::report` -- report generation (text, JSON, SPDX BOM)
 - `comply::hash` -- integrity hashing
 - `comply::license` -- license detection from text
 
 ### Phase 3b -- Command-surface parity with reuse 6.2.0 (DONE)
 
-- `comply-cli lint-file` -- lint named files only
-- `comply-cli download` -- fetch licence texts, `--all` driven by the lint audit
-- `comply-cli spdx` -- SPDX 2.1 tag-value SBOM
-- `comply-cli convert-dep5` -- DEP5 to REUSE.toml migration
-- `comply-cli supported-licenses` -- expose the bundled SPDX lists
-- `comply-cli output` -- `--quiet/--json/--plain/--lines` for both lint commands
+- `comply lint-file` -- lint named files only
+- `comply download` -- fetch licence texts, `--all` driven by the lint audit
+- `comply spdx` -- SPDX 2.1 tag-value SBOM
+- `comply convert-dep5` -- DEP5 to REUSE.toml migration
+- `comply supported-licenses` -- expose the bundled SPDX lists
+- `comply` output module -- `--quiet/--json/--plain/--lines` for both lint commands
 - `comply::config::Dep5Document` -- DEP5 header fields and folded continuation
   lines, which the previous parser dropped
 - `comply::reuse_toml::render_dep5_as_toml` -- writer verified byte-identical to
@@ -377,17 +395,22 @@ Key compatibility points:
 ## Feature flags
 
 ```toml
-# comply (core)
+# comply
 [features]
-default = ["license-db-bundled"]
-license-db-bundled = []   # Bundle SPDX License List (~500KB)
+default = ["cli"]
+cli = ["dep:anyhow", "dep:chrono", "dep:clap"]
 license-db-network = []   # Fetch license list at runtime
-
-# comply-cli
-[features]
-default = []
-intelligent = []          # AI-assisted features (requires comply-mcp)
 ```
+
+`cli` has to be in `default`: `cargo install` does not enable non-default
+features, so a binary behind an off-by-default feature makes `cargo install
+comply` install nothing and explain nothing. Library consumers opt down with
+`default-features = false`.
+
+The SPDX License List is NOT a feature. `license-db-bundled` was one -- default-on
+and gating no code at all -- so the only reachable effect of switching it off was
+a library that cannot validate an identifier against anything. It is now
+unconditional.
 
 ## Testing strategy
 
@@ -433,7 +456,7 @@ a build-speed preference.
 
 At `opt-level = 1` LLVM merges basic blocks consisting of a single trivial
 expression, and it makes that decision per backend. `Format::resolve` in
-`comply-cli/src/output.rs` is four arms each returning a unit variant, every one
+`comply/src/cli/output.rs` is four arms each returning a unit variant, every one
 of them unit-tested -- yet tarpaulin reported lines 60, 64 and 66 unexecuted on
 `x86_64-unknown-linux-gnu` while all four measured covered on
 `x86_64-apple-darwin`: 99.87% in CI against 100.00% locally. Unoptimised, the
@@ -456,6 +479,40 @@ not reach, this is a line the tests did reach and one backend declined to record
 | Stable Rust | `rust-toolchain.toml` pins stable, edition 2024 |
 | Bundled SPDX License List | Offline-first: works without network |
 | TDD strictly | Every feature starts with a failing test |
+| One crate for the library and the binary | `cargo install comply` is the command users type |
+
+### One crate for the library and the binary
+
+The binary has always been named `comply`, but it shipped from a package named
+`comply-cli`, so the obvious command installed nothing:
+
+```text
+$ cargo install comply
+error: there is nothing to install in `comply`, because it has no binaries
+```
+
+The two were lockstep-versioned anyway -- `version.workspace = true` on both,
+plus a hand-maintained copy of the version in the `[workspace.dependencies]`
+entry, because Cargo has no `version.workspace = true` for a dependency. Merging
+removes that second copy along with the papercut.
+
+The split cost more than the name. A package's `main.rs` and `lib.rs` compile as
+**separate crates**, so the CLI still reaches the library through `use
+comply::...` exactly as an external consumer does; the merge required no import
+rewriting at all. What the split was buying -- keeping clap and anyhow out of a
+library consumer's tree -- the `cli` feature buys instead, and `comply-wasm`
+proves it: `cargo tree -p comply-wasm` contains neither.
+
+Three constraints hold this together, each recorded where it can be broken:
+
+- `cli` must stay in `default` (`crates/comply/Cargo.toml`). `cargo install`
+  does not enable non-default features.
+- `default-features = false` must stay in the root `[workspace.dependencies]`
+  table (root `Cargo.toml`). Cargo silently ignores it on an inheriting member,
+  so writing it on `comply-wasm` would compile, pass, and ship clap to browsers.
+- The binary must stay at `src/main.rs` (`tarpaulin.toml`). The exclusion glob
+  is `crates/*/src/main.rs`; `src/bin/comply.rs` falls outside it and the
+  untestable entrypoint would then count against the coverage gate.
 
 ### The version has two sources, and they answer different questions
 

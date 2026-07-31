@@ -12,8 +12,13 @@ SPDX-License-Identifier: MIT OR Apache-2.0
   for compliance with the [REUSE Specification](https://reuse.software/spec/).
   Native implementation (not a port of the Python reuse-tool), with full
   configuration compatibility.
-- Virtual workspace with 3 crates under `crates/`: `comply` (core library),
-  `comply-cli` (CLI binary), `comply-wasm` (browser bindings).
+- Virtual workspace with 2 crates under `crates/`: `comply` (the compliance
+  engine plus the `comply` binary, the latter behind the default-on `cli`
+  feature) and `comply-wasm` (browser bindings). A library-only consumer opts
+  down with `default-features = false`.
+- `comply-cli` was merged into `comply` so that `cargo install comply` -- the
+  command a user actually types, the binary having always been named `comply` --
+  installs the tool. It appears in `context.md` and in git history.
 - `comply-mcp` and `comply-lsp` appear in `context.md`
 
 ## Toolchain
@@ -138,8 +143,7 @@ Documentation files (`CONTRIBUTING.md`, `CII_BEST_PRACTICES.md`, etc.) use Creat
 | `supply-chain/` | cargo-vet supply chain audits |
 | `.taplo.toml` | TOML formatting rules, schema validation disabled |
 | `Cargo.toml` | Virtual workspace root (`[workspace]` only) |
-| `crates/comply/Cargo.toml` | Core compliance library crate |
-| `crates/comply-cli/Cargo.toml` | CLI binary crate |
+| `crates/comply/Cargo.toml` | Compliance library + `comply` binary (`cli` feature) |
 | `crates/comply-wasm/Cargo.toml` | Browser bindings crate (no compliance logic) |
 | `context.md` | Owner's vision: REUSE compliance tool |
 | `docs/contribution.md` | AI agent rules -- read before committing/pushing/PRing |

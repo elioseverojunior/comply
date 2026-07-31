@@ -32,8 +32,9 @@ faster execution, and compilable to WASM for browser use.
 
 ## Workspace structure
 
-The root `Cargo.toml` is a virtual workspace. Five crates live under
-`crates/`:
+The root `Cargo.toml` is a virtual workspace. Two crates live under `crates/`,
+and two more are planned. `comply` carries both the compliance engine and the
+`comply` binary, the latter behind the default-on `cli` feature:
 
 ```mermaid
 mindmap
@@ -44,10 +45,8 @@ mindmap
       Header detection
       License detection
       REUSE.toml / DEP5 parsing
-    comply-cli
-      CLI binary
+      CLI binary (cli feature)
       Subcommands: init, format, lint, annotate, fix
-      Intelligent management
     comply-wasm
       Browser WASM target
       wasm-bindgen API
@@ -69,13 +68,11 @@ mindmap
 
 ```mermaid
 flowchart BT
-    cli["comply-cli"]
     wasm["comply-wasm"]
     mcp["comply-mcp"]
     lsp["comply-lsp"]
-    core["comply (core)"]
+    core["comply (core + cli)"]
 
-    cli --> core
     wasm --> core
     mcp --> core
     lsp --> core
@@ -117,7 +114,7 @@ All modules depend on `error` for typed errors.
 
 ## Surface crate designs
 
-### comply-cli
+### comply (cli feature)
 
 ```mermaid
 flowchart LR
@@ -215,17 +212,17 @@ flowchart LR
 | `walkdir` 2        | `comply`                                 | Recursive file discovery          |
 | `ignore` 0.4       | `comply`                                 | Gitignore-aware file filtering    |
 | `regex` 1          | `comply`                                 | SPDX header regex scanning        |
-| `clap` 4           | `comply-cli`                             | CLI argument parsing              |
+| `clap` 4           | `comply` (cli feature)                   | CLI argument parsing              |
 | `wasm-bindgen` 0.2 | `comply-wasm`                            | JS/WASM bridge                    |
 | `mcp-sdk` 0.x      | `comply-mcp`                             | MCP protocol implementation       |
 | `tower-lsp` 0.x    | `comply-lsp`                             | LSP framework                     |
-| `tokio` 1          | `comply-cli`, `comply-mcp`, `comply-lsp` | Async runtime                     |
+| `tokio` 1          | `comply-mcp`, `comply-lsp`               | Async runtime                     |
 
 ---
 
 ## External API
 
-### CLI (comply-cli)
+### CLI (comply)
 
 ```text
 Usage: comply <COMMAND>
