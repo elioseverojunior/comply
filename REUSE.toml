@@ -1,0 +1,51 @@
+SPDX-FileCopyrightText = "COMPLY contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+SPDX-PackageDownloadLocation = "https://github.com/elioseverojunior/comply"
+SPDX-PackageName = "comply"
+SPDX-PackageSupplier = "COMPLY contributors"
+version = 1
+
+[[annotations]]
+SPDX-FileCopyrightText = "COMPLY contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+path = ["**"]
+precedence = "aggregate"
+
+[[annotations]]
+SPDX-License-Identifier = "CC-BY-3.0"
+path = ["DCO.txt"]
+precedence = "aggregate"
+
+[tool.comply]
+# Custom comply settings
+# Markdown is licensed by the `**` aggregate above, so it needs no inline
+# header; these entries are that policy, not a workaround. `comply annotate`
+# now inserts below YAML frontmatter rather than above it, so removing an entry
+# here is safe -- it would gain a header, not lose its frontmatter.
+ignore = [
+  ".actrc",
+  "**/.bun-version",
+  "**/.nvmrc",
+  "**/.prettierrc",
+  "**/favicon*",
+  "**/package.json",
+  "**/tsconfig*.json",
+  # Symlinks into LICENSES/, so `cargo package` ships the licence texts inside
+  # each published crate. They MUST stay ignored: annotating a symlink writes
+  # through it, which would corrupt the canonical texts every other file cites.
+  "crates/*/LICENSE-*",
+  "**/target/**",
+  "**/*.lock",
+  "DCO.txt",
+]
+
+# Neither the built-in tables nor the reference tool claim these two, so
+# `annotate` refuses them rather than guessing a syntax -- declaring it here is
+# the supported answer. Pkl takes `#` line comments despite its `//` docs, and
+# `.gitmessage` is a git commit template, where `#` is what git strips.
+[[tool.comply.comment-styles]]
+close = ""
+extensions = ["pkl"]
+filenames = [".gitmessage"]
+line = ""
+open = "#"

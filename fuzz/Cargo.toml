@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+edition = "2024"
+name = "comply-fuzz"
+publish = false
+version = "0.0.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace, deliberately. The root workspace denies `unsafe_code` and
+# treats warnings as errors; `fuzz_target!` expands to an `unsafe extern "C"`
+# entry point, so a fuzz crate can never satisfy those lints. Keeping it out
+# also keeps `cargo package --workspace` and the coverage gate unaware of it.
+[workspace]
+members = ["."]
+
+[dependencies]
+comply = { path = "../crates/comply" }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+bench = false
+doc = false
+name = "spdx_parse"
+path = "fuzz_targets/spdx_parse.rs"
+test = false

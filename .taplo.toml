@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[formatting]
+# taplo pads trailing comments into a column, cargo-sort emits a single space,
+# and each rewrites what the other just wrote -- so `cargo:sort:check` and
+# `taplo:check` could never both pass on a file with inline comments (see
+# crates/comply/Cargo.toml's [features]). taplo is the formatter of record, so
+# it yields on this one point rather than the two fighting forever.
+align_comments = false
+indent_string = "  "
+indent_table = true
+reorder_keys = true
+
+[schema]
+# Cargo.toml uses [lints.rust] which the SchemaStore schema doesn't recognize.
+# Disable schema validation to suppress false-positive warnings.
+enabled = false

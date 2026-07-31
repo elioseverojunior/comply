@@ -1,0 +1,160 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+name: Version
+
+on:
+  workflow_dispatch:
+  # Job outputs are NOT visible to a caller on their own -- a reusable workflow
+  # has to republish them here, or `needs.<job>.outputs.*` resolves to nothing
+  # and every consumer silently reads an empty string. The `semver` job below
+  # declares the same nine names; both halves are required, and the `jobs.<id>`
+  # here must track the job id -- renaming the job without updating these breaks
+  # every output at once.
+  workflow_call:
+    outputs:
+      json:
+        description: "The full GitVersion object, PascalCase keys, MajorMinor added and the two Assembly fields removed -- the same shape `mise run version:json` prints"
+        value: ${{ jobs.semver.outputs.json }}
+      version:
+        description: "SemVer, e.g. 0.0.1-1"
+        value: ${{ jobs.semver.outputs.version }}
+      major:
+        description: "Major, e.g. 0"
+        value: ${{ jobs.semver.outputs.major }}
+      minor:
+        description: "Minor, e.g. 0"
+        value: ${{ jobs.semver.outputs.minor }}
+      patch:
+        description: "Patch, e.g. 1"
+        value: ${{ jobs.semver.outputs.patch }}
+      majorMinor:
+        description: "Major.Minor, e.g. 0.0 -- the one DERIVED field, because the GitVersion action publishes no such output"
+        value: ${{ jobs.semver.outputs.majorMinor }}
+      majorMinorPatch:
+        description: "Major.Minor.Patch, e.g. 0.0.1"
+        value: ${{ jobs.semver.outputs.majorMinorPatch }}
+      preReleaseLabel:
+        description: "Pre-release label, empty on a stable version -- callers test it to decide whether to publish"
+        value: ${{ jobs.semver.outputs.preReleaseLabel }}
+      shortSha:
+        description: "Abbreviated commit SHA, e.g. 9301177"
+        value: ${{ jobs.semver.outputs.shortSha }}
+
+# NOT `read-all`. This workflow is CALLED, and a called workflow cannot request
+# more than the calling JOB grants. `read-all` expands to read on every scope
+# there is -- attestations, discussions, models, packages, statuses and a dozen
+# more -- so the call fails with "The workflow is requesting 'actions: read,
+# artifact-metadata: read, ...' but is only allowed". publish.yml carries the
+# same note for the same reason. A job needing more declares it itself.
+permissions:
+  contents: read
+
+env:
+  GITVERSION_SPEC: ${{ vars.GITVERSION_SPEC || '6.x' }}
+
+jobs:
+  semver:
+    name: Semantic Versioning
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    # `contents: read` only. `actions: write` was rejected outright -- "the
+    # nested job 'version' is requesting 'actions: write', but is only allowed
+    # 'actions: none'" -- because the calling job in cicd.yml grants `contents:
+    # read` and a nested job cannot exceed that. Nothing here needs it: the job
+    # checks out, runs GitVersion and composes JSON. It uploads no artifact and
+    # touches no Actions API.
+    permissions:
+      contents: read
+    outputs:
+      # Sourced from `steps.version` -- the COMPOSE step -- not from
+      # `steps.gitversion`, which is the action itself. The action publishes no
+      # `json` and no `majorMinor`, so reading those off it yields an empty
+      # string; actionlint cannot catch that, because it has no output metadata
+      # for a third-party action and accepts any name you ask for.
+      #
+      # `json` carries the whole object, so nothing here is strictly necessary:
+      # `fromJSON(needs.version.outputs.json).Patch` reaches every field. The
+      # named ones exist because callers ask for them by name, and each must ALSO
+      # be republished under `on.workflow_call.outputs` above -- a name declared
+      # in only one of the two places resolves to an empty string, silently.
+      json: ${{ steps.version.outputs.json }}
+      version: ${{ steps.version.outputs.version }}
+      major: ${{ steps.version.outputs.major }}
+      minor: ${{ steps.version.outputs.minor }}
+      patch: ${{ steps.version.outputs.patch }}
+      majorMinor: ${{ steps.version.outputs.majorMinor }}
+      majorMinorPatch: ${{ steps.version.outputs.majorMinorPatch }}
+      preReleaseLabel: ${{ steps.version.outputs.preReleaseLabel }}
+      shortSha: ${{ steps.version.outputs.shortSha }}
+    steps:
+      # GitVersion derives the version from tags and commit distance, so it needs
+      # the history, not a shallow clone: `fetch-depth: 0` and `fetch-tags` are
+      # load-bearing. A called workflow runs on its own runner and inherits
+      # nothing from the caller, so the checkout has to happen here.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: "recursive"
+          fetch-depth: 0
+          fetch-tags: "true"
+          token: ${{ secrets.GITHUB_TOKEN || github.token }}
+
+      - name: Cache GitVersion Tool
+        id: cache-gitversion
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            /opt/hostedtoolcache/GitVersion.Tool
+            ~/.dotnet/tools
+          key: gitversion-${{ runner.os }}-${{ runner.arch }}-${{ env.GITVERSION_SPEC }}
+          restore-keys: |
+            gitversion-${{ runner.os }}-${{ runner.arch }}-
+            gitversion-${{ runner.os }}-
+
+      - name: Install GitVersion
+        id: install-gitversion
+        uses: gittools/actions/gitversion/setup@7417b1089e2c7de93510f1901d656ddf60bb024f # v4.7.0
+        with:
+          versionSpec: ${{ env.GITVERSION_SPEC }}
+          preferLatestVersion: true
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@7417b1089e2c7de93510f1901d656ddf60bb024f # v4.7.0
+
+      # The action publishes no `majorMinor`, so it has to be derived. Derived
+      # from `toJSON(...outputs)` rather than a hand-written list of the 26
+      # fields: whatever the action emits flows through, so upgrading it cannot
+      # silently drop a value here.
+      #
+      # Keys are capitalised first. The action emits camelCase while
+      # `gitversion /output json` emits PascalCase; GitHub expressions compare
+      # property names case-insensitively so nothing notices, but jq does not --
+      # unconverted, `.Major` is null and MajorMinor comes out "null.null".
+      # Capitalised, the two key sets are identical, and the deletion and
+      # MajorMinor shape below mirror `mise run version:json`, so the local and
+      # CI answers are the same object. (`PreReleaseLabelWithDash` is the one
+      # field the action does not expose; nothing reads it.)
+      - name: Compose version JSON
+        id: version
+        env:
+          GITVERSION_OUTPUTS: ${{ toJSON(steps.gitversion.outputs) }}
+        run: |
+          set -Eeuo pipefail
+          json="$(printf '%s' "${GITVERSION_OUTPUTS}" | jq -Sc '
+            with_entries(.key |= (.[0:1] | ascii_upcase) + .[1:])
+            | del(.AssemblySemVer, .AssemblySemFileVer)
+            + {MajorMinor: "\(.Major).\(.Minor)"}')"
+          {
+            echo "json=${json}"
+            echo "version=$(printf '%s' "${json}" | jq -r '.SemVer')"
+            echo "major=$(printf '%s' "${json}" | jq -r '.Major')"
+            echo "minor=$(printf '%s' "${json}" | jq -r '.Minor')"
+            echo "patch=$(printf '%s' "${json}" | jq -r '.Patch')"
+            echo "majorMinor=$(printf '%s' "${json}" | jq -r '.MajorMinor')"
+            echo "majorMinorPatch=$(printf '%s' "${json}" | jq -r '.MajorMinorPatch')"
+            echo "preReleaseLabel=$(printf '%s' "${json}" | jq -r '.PreReleaseLabel')"
+            echo "shortSha=$(printf '%s' "${json}" | jq -r '.ShortSha')"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${json}" | jq -r '"Version: \(.SemVer) Major: \(.Major) MajorMinor: \(.MajorMinor) MajorMinorPatch: \(.MajorMinorPatch)"'

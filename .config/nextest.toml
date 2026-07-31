@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# cargo-nextest configuration.
+
+[profile.default]
+# How long nextest waits, after a test process exits, for its stdout/stderr pipe
+# to close before reporting LEAK. The default 100ms is tight enough that a loaded
+# machine trips it on tests that spawn nothing at all -- `comply`'s walk tests
+# reached it while coverage runs and containers were competing for CPU, despite
+# the `ignore` crate spawning neither a subprocess nor a thread on the path they
+# use (`Walk`, not `WalkParallel`).
+#
+# 500ms keeps the check meaningful: a test that really does leave a child process
+# holding the pipe still gets reported. Raising it only removes the false
+# positives from scheduling delay.
+#
+# LEAK never fails a run either way -- nextest counts leaky tests as passed --
+# so this is about signal quality, not about turning a failure green.
+leak-timeout = "500ms"

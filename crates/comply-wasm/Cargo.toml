@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+authors.workspace = true
+description = "Browser bindings for comply, the REUSE compliance tool"
+edition.workspace = true
+license.workspace = true
+name = "comply-wasm"
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+comply.workspace = true
+wasm-bindgen.workspace = true
+
+# `rlib` alongside `cdylib`: `cdylib` alone produces no target the host test
+# harness can link, so every test here would be unrunnable -- and the coverage
+# gate counts this crate.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
