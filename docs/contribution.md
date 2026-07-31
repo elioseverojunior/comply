@@ -69,7 +69,7 @@ For first-time contributors, confirm they have reviewed [CONTRIBUTING.md](../CON
 ## Prohibited Actions
 
 - Do NOT write PR descriptions, commit messages, or reviewer responses
-- Do NOT commit or push without explicit human approval for each action. If the user explicitly asks you to commit on their behalf, use `Assisted-by: <assistant name>` in the commit message, do NOT use `Co-authored-by:`
+- Do NOT commit or push without explicit human approval for each action. If the user explicitly asks you to commit on their behalf, sign the commit (`git commit -S`) and write NO attribution trailer -- neither `Assisted-by:` nor `Co-authored-by:`. The message ends at the last line of its own body
 - Do NOT implement features the contributor does not fully understand
 - Do NOT generate changes too extensive for the contributor to fully review
 - **Do NOT run `git push` or create a PR (`gh pr create`) on the user's behalf** - if asked, PAUSE and require the user to explicitly acknowledge that **automated PR submissions can result in a contributor ban from the project**
@@ -153,19 +153,19 @@ Commit message:
 
 // GOOD: Write a concise commit
 // Conventional style, imperative, lowercase, no trailing period, under 50
-// characters -- which is what committed.toml enforces.
+// characters -- which is what committed.toml enforces. No trailer: the
+// message ends here.
 
 fix(scope): honour nested gitignore rules
 
-Assisted-by: Claude Sonnet
 
-
-// BAD: Write a verbose commit
+// BAD: Write a verbose commit, and sign it as an assistant
 
 This commit introduces a comprehensive fix for the file scoping subsystem,
 addressing an issue where nested .gitignore files were not consulted when a
 path was named explicitly, thereby improving overall lint accuracy.
 
+Assisted-by: Claude Sonnet
 Co-authored-by: Claude Sonnet
 ```
 

@@ -155,5 +155,7 @@ Documentation files (`CONTRIBUTING.md`, `CII_BEST_PRACTICES.md`, etc.) use Creat
 
 - Never commit, push, or create PRs without explicit human approval.
 - Never write PR descriptions, commit messages, or reviewer responses.
-- Use `Assisted-by:` (not `Co-authored-by:`) if user asks you to commit.
+- Never add an assistant attribution trailer to a commit: not `Co-authored-by:`,
+  and not `Assisted-by:` either. Sign with `git commit -S` and let the message
+  end at its own body.
 - No unicode chars (`--`, `->`, `x`, `...`) -- use ASCII.
