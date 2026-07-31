@@ -23,8 +23,8 @@ use comply::config::Config;
 use comply::hash;
 use comply::report::{Report, Status};
 
-use crate::commands::lint::lint_project;
-use crate::shared::{load_config, resolve_root};
+use crate::cli::commands::lint::lint_project;
+use crate::cli::shared::{load_config, resolve_root};
 
 /// Who is signing off on the document.
 pub(crate) struct Creators<'a> {

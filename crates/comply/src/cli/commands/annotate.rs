@@ -9,7 +9,7 @@ use chrono::Datelike;
 use comply::file::{self, FileType};
 use comply::header;
 
-use crate::shared::{
+use crate::cli::shared::{
     load_config, permitted_targets, resolve_root, to_repo_relative, write_reuse_toml_override,
 };
 

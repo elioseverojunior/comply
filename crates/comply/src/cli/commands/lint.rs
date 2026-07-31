@@ -13,8 +13,8 @@ use comply::file::{self, FileType};
 use comply::report::{Report, ReportBuilder, Status};
 use comply::{header, license, spdx};
 
-use crate::output::{self, Format};
-use crate::shared::{load_config, resolve_root};
+use crate::cli::output::{self, Format};
+use crate::cli::shared::{load_config, resolve_root};
 
 /// Decide one source file's status and the licensing that applies to it.
 ///

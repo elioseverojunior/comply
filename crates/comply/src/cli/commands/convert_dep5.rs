@@ -11,7 +11,7 @@ use anyhow::{Context, Result, bail};
 use comply::config::Config;
 use comply::reuse_toml;
 
-use crate::shared::resolve_root;
+use crate::cli::shared::resolve_root;
 
 /// Where DEP5 lives, relative to the project root.
 const DEP5: &str = ".reuse/dep5";

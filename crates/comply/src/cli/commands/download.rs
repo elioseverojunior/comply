@@ -18,8 +18,8 @@ use std::process::Command as Process;
 use anyhow::{Context, Result, bail};
 use comply::spdx;
 
-use crate::commands::lint::lint_project;
-use crate::shared::{load_config, resolve_root};
+use crate::cli::commands::lint::lint_project;
+use crate::cli::shared::{load_config, resolve_root};
 
 /// `{}` is replaced with the SPDX identifier.
 const DEFAULT_SOURCE: &str =

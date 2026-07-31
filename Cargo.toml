@@ -14,6 +14,7 @@ authors = ["Elio Severo Junior <elioseverojunior@gmail.com>"]
 # missing one -- crates.io rejects an empty description at publish time, but a
 # missing `workspace.package` key fails loudly at build time instead.
 edition = "2024"
+exclude = ["/tests"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/elioseverojunior/comply"
@@ -58,8 +59,14 @@ clap = { version = ">=4.6,<5.0.0", features = ["derive"] }
 #
 # Cargo has no `version.workspace = true` for a dependency, so this is a second
 # copy of the version and has to be bumped with it.
-comply = { path = "crates/comply", version = "0.0.1-1" }
-comply-cli = { path = "crates/comply-cli", version = "0.0.1-1" }
+#
+# `default-features = false` HAS to live here rather than on the member that
+# wants it. A member writing `comply = { workspace = true, default-features =
+# false }` is silently ignored -- inheritance is additive, so a member may widen
+# a dependency but never narrow it, and narrowing is a no-op rather than an
+# error. Written here it holds, which is what keeps clap and anyhow out of
+# `comply-wasm`'s browser bundle.
+comply = { path = "crates/comply", version = "0.0.1-1", default-features = false }
 ignore = { version = ">=0.4,<1.0.0" }
 regex = { version = ">=1.13,<2.0.0" }
 serde = { version = ">=1.0,<2.0.0", features = ["derive"] }

@@ -5,21 +5,17 @@
 use anyhow::Result;
 use clap::Parser;
 
-mod commands;
-mod output;
-mod shared;
+mod cli;
 
 use comply::version::LONG_VERSION;
 
-use commands::{
+use cli::commands::{
     annotate, convert_dep5, download, fix, format, init, lint, lint_file, spdx, supported_licenses,
     version,
 };
 
 #[derive(Parser)]
 #[command(
-    // `comply`, not the `comply-cli` package name clap would otherwise print --
-    // the version line should name the command the user typed.
     name = "comply",
     version,
     long_version = LONG_VERSION,
@@ -308,13 +304,9 @@ mod tests {
     }
 
     #[test]
-    fn the_short_version_names_the_binary_not_the_package() {
-        // The crate is `comply-cli` but the binary it installs is `comply`;
-        // reporting the package name makes `comply --version` disagree with the
-        // command the user just typed.
+    fn the_short_version_names_the_command_the_user_typed() {
         let rendered = Command::command().render_version();
         assert!(rendered.starts_with("comply "), "got {rendered:?}");
-        assert!(!rendered.starts_with("comply-cli"), "got {rendered:?}");
     }
 
     #[test]

@@ -16,9 +16,9 @@ use comply::file::{self, FileEntry};
 use comply::license::{self, LicenseAudit};
 use comply::report::Report;
 
-use crate::commands::lint::lint_entry;
-use crate::output::{self, Format};
-use crate::shared::{load_config, resolve_root};
+use crate::cli::commands::lint::lint_entry;
+use crate::cli::output::{self, Format};
+use crate::cli::shared::{load_config, resolve_root};
 
 /// Build the entry for one named path, classifying it exactly as a walk would.
 ///

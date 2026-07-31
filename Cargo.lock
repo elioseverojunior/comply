@@ -172,7 +172,9 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 name = "comply"
 version = "0.0.1-1"
 dependencies = [
+ "anyhow",
  "chrono",
+ "clap",
  "ignore",
  "regex",
  "serde",
@@ -182,19 +184,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
-]
-
-[[package]]
-name = "comply-cli"
-version = "0.0.1-1"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "comply",
- "serde",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]

@@ -7,7 +7,7 @@ use std::fs;
 use anyhow::{Context, Result};
 use comply::header;
 
-use crate::shared::{load_config, permitted_targets, resolve_root, walk_source_files};
+use crate::cli::shared::{load_config, permitted_targets, resolve_root, walk_source_files};
 
 /// Returns `true` when nothing needs reformatting.
 ///

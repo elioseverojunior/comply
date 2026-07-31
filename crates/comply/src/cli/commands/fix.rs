@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::shared::{load_config, resolve_root};
+use crate::cli::shared::{load_config, resolve_root};
 use anyhow::{Context, Result};
 use comply::fix;
 
@@ -204,7 +204,7 @@ mod tests {
         let annotate_root = annotate_tmp.path().canonicalize().unwrap();
         fs::write(annotate_root.join("logo.png"), [0x89, b'P', b'N', b'G']).unwrap();
 
-        crate::commands::annotate::run(&crate::Command::Annotate {
+        crate::cli::commands::annotate::run(&crate::Command::Annotate {
             files: vec![],
             path: Some(annotate_root.to_str().unwrap().to_string()),
             license: Some("MIT".to_string()),

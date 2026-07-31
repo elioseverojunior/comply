@@ -10,7 +10,7 @@ use anyhow::Result;
 use comply::report::{Report, Status};
 use comply::spdx;
 
-use crate::shared::print_json_report;
+use crate::cli::shared::print_json_report;
 
 /// How a lint report is rendered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

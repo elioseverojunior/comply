@@ -4,8 +4,12 @@
 
 [package]
 authors.workspace = true
-categories = ["development-tools", "parser-implementations"]
-description = "Core library for REUSE Specification compliance: SPDX expression parsing, header detection, file classification, and license auditing"
+categories = [
+  "command-line-utilities",
+  "development-tools",
+  "parser-implementations",
+]
+description = "REUSE Specification compliance tool and library: lint, annotate, and fix SPDX license headers"
 documentation = "https://docs.rs/comply"
 edition.workspace = true
 keywords = ["reuse", "spdx", "license", "compliance", "copyright"]
@@ -17,17 +21,33 @@ rust-version.workspace = true
 version.workspace = true
 
 # cargo-machete reads `src/` only, so a dependency used exclusively by `build.rs`
-# reads as unused. chrono is one: it stamps the build timestamp and nothing in
-# the library itself touches it.
+# reads as unused. chrono is one: it stamps the build timestamp. It is a normal
+# dependency too, behind `cli`, but that is a separate entry -- dropping this
+# ignore would flag the build-dependency on its own.
 [package.metadata.cargo-machete]
 ignored = ["chrono"]
 
+# `cli` is in `default` because `cargo install` does NOT enable non-default
+# features: with the binary gated behind an off-by-default feature,
+# `cargo install comply` would install nothing and say nothing about why.
+#
+# Library consumers opt down with `default-features = false`, which drops clap,
+# anyhow and chrono. That opt-out only takes effect when written in the
+# `[workspace.dependencies]` table -- Cargo silently IGNORES
+# `default-features = false` on an inheriting member. See the root Cargo.toml.
+#
+# The SPDX license list is deliberately NOT a feature. It was `license-db-bundled`,
+# on by default and gating no code at all, so the only thing switching it off
+# could achieve was a library that cannot validate an identifier against anything.
 [features]
-default = ["license-db-bundled"]
-license-db-bundled = [] # Bundle SPDX License List (all 727+ known IDs)
+cli = ["dep:anyhow", "dep:chrono", "dep:clap"]
+default = ["cli"]
 license-db-network = [] # Fetch license list at runtime (NOT YET IMPLEMENTED)
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
 ignore = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -42,6 +62,17 @@ chrono = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+# `required-features`, so `--no-default-features` SKIPS this target rather than
+# failing to compile a `main.rs` whose every import just vanished.
+#
+# `src/main.rs`, not `src/bin/comply.rs`: tarpaulin.toml excludes
+# `crates/*/src/main.rs` as untestable entrypoint boilerplate, and a path under
+# `src/bin/` falls outside that glob -- it would drag the coverage gate under.
+[[bin]]
+name = "comply"
+path = "src/main.rs"
+required-features = ["cli"]
 
 [lints]
 workspace = true
