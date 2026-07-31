@@ -19,7 +19,11 @@ cargo-fuzz = true
 members = ["."]
 
 [dependencies]
-comply = { path = "../crates/comply" }
+# `default-features = false`: the fuzz targets exercise library entry points,
+# so pulling in `cli` would build clap and anyhow on every fuzz run for nothing.
+# This is a direct dependency rather than a workspace-inherited one -- fuzz is
+# its own workspace -- so the opt-out takes effect where it is written.
+comply = { path = "../crates/comply", default-features = false }
 libfuzzer-sys = "0.4"
 
 [[bin]]
