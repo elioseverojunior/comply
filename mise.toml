@@ -1024,7 +1024,7 @@ eval "args=(${usage_args:-lint})"
 # ALWAYS build from this workspace. An installed `comply` on PATH would make the
 # gate report on whatever binary happened to be installed rather than on the code
 # being changed -- a green check for a tree that does not pass.
-cargo run --quiet -p comply-cli -- "${args[@]}"
+cargo run --quiet -p comply -- "${args[@]}"
 '''
 shell = "bash -c"
 usage = 'arg "[args]" var=#true help="comply subcommand + flags; defaults to `lint` when omitted"'
@@ -1073,7 +1073,7 @@ fi
 # change. The `**` aggregate in REUSE.toml already covers these files, so a
 # per-file `override` block adds nothing -- and `override` would supersede the
 # inline header written above.
-cargo run --quiet -p comply-cli -- annotate \
+cargo run --quiet -p comply -- annotate \
     --copyright "COMPLY contributors" \
     --license "MIT OR Apache-2.0" \
     --merge-copyrights \
@@ -1095,7 +1095,7 @@ fmt_args=()
 for p in "${real[@]}"; do
     fmt_args+=(--files "$p")
 done
-cargo run --quiet -p comply-cli -- format "${fmt_args[@]}"
+cargo run --quiet -p comply -- format "${fmt_args[@]}"
 '''
 shell = "bash -c"
 usage = 'arg "<paths>" var=#true help="files to annotate, e.g. crates/foo/src/lib.rs"'
@@ -1215,12 +1215,22 @@ run = '''
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-RUST_VERSION=$(grep -oP 'channel\s*=\s*"\K[^"]+' rust-toolchain.toml 2>/dev/null \
-  || grep -oP 'rust-version\s*=\s*"\K[^"]+' Cargo.toml 2>/dev/null \
-  || echo "1.97")
-APP_VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' Cargo.toml 2>/dev/null || echo "0.1.0")
+# `sed`, not `grep -oP`: BSD grep (the macOS default, and first on PATH even
+# when GNU grep is installed) has no `-P`, so both lookups failed and the `||`
+# fallbacks silently supplied literals. That tagged the image `comply:0.1.0`
+# while the workspace was at 0.0.1-1 -- a wrong version label, reported by
+# nothing.
+RUST_VERSION=$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml 2>/dev/null \
+  || sed -n 's/^rust-version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml 2>/dev/null)
+RUST_VERSION="${RUST_VERSION:-1.97}"
+APP_VERSION=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml 2>/dev/null)
+APP_VERSION="${APP_VERSION:-0.1.0}"
 
-IMAGE_TAG="${RUST_VERSION}-trixie"
+# Overrides the BUILD base only. The Dockerfile's runtime base
+# (`IMAGE_TAG_RUNTIME`) keeps its digest-pinned default: a single shared
+# `IMAGE_TAG` sent this rust tag to the `debian:` FROM as well and asked for
+# `debian:1.97-trixie`, which does not exist.
+IMAGE_TAG_BUILD="${RUST_VERSION}-trixie"
 DOCKER_TAG="${usage_tag:-comply:${APP_VERSION}}"
 DOCKERFILE="${usage_file:-Dockerfile}"
 
@@ -1232,7 +1242,7 @@ done
 
 docker buildx build \
   --pull \
-  --build-arg "IMAGE_TAG=${IMAGE_TAG}" \
+  --build-arg "IMAGE_TAG_BUILD=${IMAGE_TAG_BUILD}" \
   "${BUILD_ARGS[@]}" \
   -f "$DOCKERFILE" \
   -t "$DOCKER_TAG" \
@@ -1293,7 +1303,7 @@ echo ""
 echo "--- Verifying .dockerignore ---"
 
 # Expected: essential build files MUST be present
-for f in "Cargo.toml" "Cargo.lock" "crates/comply-cli/build.rs" "rust-toolchain.toml"; do
+for f in "Cargo.toml" "Cargo.lock" "crates/comply/build.rs" "rust-toolchain.toml"; do
     if echo "$CONTEXT_FILES" | grep -q "/ctx/$f"; then
         echo "  [ok]   $f present"
     else
@@ -1303,7 +1313,7 @@ for f in "Cargo.toml" "Cargo.lock" "crates/comply-cli/build.rs" "rust-toolchain.
 done
 
 # Check that key directories exist
-for d in "crates/comply/src/lib.rs" "crates/comply-cli/src/main.rs" ".cargo/config.toml"; do
+for d in "crates/comply/src/lib.rs" "crates/comply/src/main.rs" ".cargo/config.toml"; do
     if echo "$CONTEXT_FILES" | grep -q "/ctx/$d"; then
         echo "  [ok]   $d present"
     else

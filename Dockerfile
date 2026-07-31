@@ -6,15 +6,27 @@
 
 # Multi-stage Dockerfile for multi-architecture builds (linux/amd64, linux/arm64)
 
-# Dependency stage
-ARG IMAGE_TAG=1-slim@sha256:5c6f46a6e4472ab1ca7ba7d494e6677f2f219ebc02f32025d3986f057635ec9c
+# Base images. BOTH declared here, before the first FROM: only a global-scope
+# ARG is visible to a FROM line. Declared after a stage instead, the runtime
+# tag resolved to empty -- "failed to parse stage name
+# docker.io/library/debian:" -- because the declaration belonged to that stage
+# rather than to the build.
+#
+# Two names rather than one, because a `--build-arg` overrides the default in
+# every stage declaring that name. A single shared `IMAGE_TAG` meant
+# `docker:build` passing the toolchain version produced
+# `debian:1.97-trixie`, which does not exist.
+ARG IMAGE_TAG_BUILD=1.97-slim-trixie@sha256:5c6f46a6e4472ab1ca7ba7d494e6677f2f219ebc02f32025d3986f057635ec9c
+ARG IMAGE_TAG_RUNTIME=trixie-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd
 ARG APP_VERSION=0.1.0
 
-FROM --platform=$BUILDPLATFORM docker.io/library/rust:${IMAGE_TAG} AS dependencies
+# Dependency stage
+
+FROM --platform=$BUILDPLATFORM docker.io/library/rust:${IMAGE_TAG_BUILD} AS dependencies
 
 SHELL ["/bin/bash", "-eou", "pipefail", "-c"]
 
-ARG IMAGE_TAG
+ARG IMAGE_TAG_BUILD
 ARG APP_VERSION
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
@@ -78,10 +90,12 @@ EOF
 
 WORKDIR ${BUILD_PATH}
 
-# 3. Copy manifests and global build script
-COPY Cargo.toml Cargo.lock build.rs ./
+# 3. Copy manifests. No root `build.rs`: the root is a VIRTUAL workspace
+# (`[workspace]` only), so a build script there would never run. One exists in
+# two dangling commits and none reachable from main, and copying it failed the
+# build outright -- `"/build.rs": not found`.
+COPY Cargo.toml Cargo.lock ./
 COPY crates/comply/Cargo.toml crates/comply/
-COPY crates/comply-cli/Cargo.toml crates/comply-cli/
 COPY .cargo/config.toml ./.cargo/config.toml
 
 # 4. Generate boilerplate and build dependencies caching both target architectures correctly
@@ -91,13 +105,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry\
   #!/bin/bash
   set -exou pipefail
 
-  # Create minimal rust source placeholders
-  mkdir -p crates/comply/src crates/comply-cli/src src/native
+  # Create minimal rust source placeholders. `comply` carries both targets:
+  # the library and the `comply` binary now live in one crate.
+  mkdir -p crates/comply/src
   touch crates/comply/src/lib.rs
-  echo 'fn main() { println!("===> Preparing Cargo Dependencies! <==="); }' > crates/comply-cli/src/main.rs
-
-  # Mock the C native file so cc/build.rs doesn't crash during dependency compilation
-  echo 'void comply_native_dummy() {}' > src/native/comply_native.c
+  echo 'fn main() { println!("===> Preparing Cargo Dependencies! <==="); }' > crates/comply/src/main.rs
 
   # Build targeting the exact architecture matching the multi-arch flow
   case "$TARGETPLATFORM" in
@@ -173,18 +185,19 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry\
   esac
 EOF
 
-# Runtime stage - minimal image with just the binary and runtime deps
-ARG IMAGE_TAG=trixie-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd
-# Braced `${IMAGE_TAG}`, matching the dependencies stage above: Scorecard's
+# Runtime stage - minimal image with just the binary and runtime deps.
+#
+# Braced `${IMAGE_TAG_RUNTIME}`, matching the dependencies stage above: Scorecard's
 # pinned-dependencies check resolves the braced form back to the ARG's digest
-# but not the bare `$IMAGE_TAG`, so this line alone read as unpinned.
-FROM docker.io/library/debian:${IMAGE_TAG} AS runtime
+# but not the bare `$IMAGE_TAG_RUNTIME`, so this line alone read as unpinned.
+# The declaration is at the top of the file, not here -- see the note there.
+FROM docker.io/library/debian:${IMAGE_TAG_RUNTIME} AS runtime
 
 # Install only runtime dependencies (SSL certs, libssl, tini for signal handling)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked\
  --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOF
   #!/bin/bash
-  set -ex pipefail
+  set -exo pipefail
   apt-get update
   apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -213,11 +226,19 @@ LABEL org.opencontainers.image.security.no-new-privileges="true" \
 # Entrypoint wrapper: allows `docker run comply:0.1.0 bash` for debugging
 RUN <<EOF
 #!/bin/bash
-set -ex pipefail
+set -exo pipefail
 
-cat > /entrypoint.sh <<SCRIPT
+# QUOTED delimiter, so `\$@` and `\${1:-}` land in the file literally instead of
+# being expanded by THIS shell while the image builds. Unquoted, the wrapper was
+# written with the build-time values baked in and every runtime argument was
+# discarded: `docker run comply --version` ran `/app/comply pipefail`.
+cat > /entrypoint.sh <<'SCRIPT'
 #!/bin/bash
-set -ex pipefail
+# `-exo pipefail`, not `-ex pipefail`. The latter takes `pipefail` as a
+# POSITIONAL parameter rather than an option, so it overwrote "$@" with
+# `pipefail` before the dispatch below could read it -- which is how the
+# build-time value got in here in the first place.
+set -exo pipefail
 
 # If first arg is a shell, exec it directly (for debugging)
 case "${1:-}" in

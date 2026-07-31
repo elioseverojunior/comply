@@ -2,6 +2,20 @@
 #
 # SPDX-License-Identifier: MIT OR Apache-2.0
 
+# taplo walks the whole tree and does NOT read .gitignore, so without this the
+# gate fails on files no one wrote:
+#   * `target/**` -- `cargo package` and `cargo semver-checks` both synthesise a
+#     Cargo.toml there, formatted by cargo rather than by taplo. Running either,
+#     then `taplo:check`, failed the gate until `target/` was cleaned.
+#   * `.worktrees/**` -- a full second copy of the repo (AGENTS.md puts feature
+#     branches there), so in-progress TOML on one branch failed the gate on
+#     another.
+#   * `node_modules/**` -- vendored packages, not ours to format.
+#
+# `**/target/**` rather than `target/**`: it has to catch `fuzz/target/` too,
+# which is a separate cargo workspace.
+exclude = ["**/target/**", "**/node_modules/**", ".worktrees/**"]
+
 [formatting]
 # taplo pads trailing comments into a column, cargo-sort emits a single space,
 # and each rewrites what the other just wrote -- so `cargo:sort:check` and

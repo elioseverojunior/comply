@@ -60,11 +60,21 @@ tomlfmt.toml
 taplo.toml
 .env
 
-# All markdown, including each crate's README. `readme = "README.md"` is package
-# metadata read by `cargo package`/`publish`, never by `cargo build`, so none of
-# it belongs in an image build context.
+# All markdown. The `readme = "README.md"` KEY is package metadata, read by
+# `cargo package`/`publish` and never by `cargo build` -- but that is not the
+# only thing that reads the file.
+#
+# `crates/comply/src/lib.rs` carries `#![doc = include_str!("../README.md")]`,
+# and `include_str!` is expanded by rustc during compilation, so a plain
+# `cargo build` needs the file on disk. Excluding it failed the builder stage
+# with "couldn't read crates/comply/src/../README.md: No such file or
+# directory". The dependencies stage was unaffected -- it `touch`es an empty
+# placeholder lib.rs -- so the break only surfaced after `COPY . .`.
+#
+# Negation must FOLLOW the exclusion: last matching rule wins.
 **/*.md
 DCO.txt
+!crates/*/README.md
 
 # The Dockerfiles themselves are read by the builder, not copied into a stage.
 Dockerfile
