@@ -22,4 +22,9 @@ profile = "minimal"
 # --engine llvm) and cargo-pgo; `default` would have supplied clippy and
 # rustfmt, and now does not.
 components = ["clippy", "llvm-tools", "rustfmt"]
-targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
+targets = [
+  "wasm32-unknown-unknown",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+]
