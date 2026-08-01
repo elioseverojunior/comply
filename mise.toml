@@ -616,12 +616,50 @@ arg "<tag>" help="exact tag name to delete, e.g. v0.0.1-1 (required; never deriv
 flag "--floating" help="also delete the floating tags that this version would move"
 '''
 
+# GitVersion derives the version from the TAG GRAPH, and `git fetch` does NOT
+# update a tag that already exists locally -- so a tag rewritten upstream stays
+# pinned to the old commit forever, silently.
+#
+# That is not hypothetical. `v0.0.1-1` pointed at a pre-rewrite commit locally
+# and at the init commit on origin. Locally GitVersion found no REACHABLE source,
+# counted from the root and said 0.1.0-10; CI fetched origin's tags, anchored on
+# the init commit and said 0.1.0-9. Same commit, same GitVersion 6.8.2, one
+# off-by-one -- and it only surfaced because a workflow warned that Cargo.toml
+# disagreed with the run.
+#
+# Never fatal. A version task has to keep working offline and in a clone with no
+# remote; a stale graph gives a wrong answer, no network merely gives an old one.
+[tasks."git:tags:fetch"]
+alias = []
+description = "Force-refresh tags from origin so GitVersion sees the graph CI sees"
+hide = true
+run = '''
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+git remote get-url origin >/dev/null 2>&1 || exit 0
+
+# `--force` is the whole point: without it git leaves an existing tag alone and
+# the refresh is a no-op precisely when it matters.
+git fetch --tags --force --quiet origin 2>/dev/null || {
+    echo "version: could not reach origin; tags may be stale and the computed version wrong" >&2
+    exit 0
+}
+'''
+shell = "bash -c"
+
 # Emits the GitVersion stamp the router serves from GET /version. Hidden because
 # it is plumbing: the compose tasks source it, nobody runs it directly. Failure is
 # not fatal — an unstamped deployment answers "unknown", which beats refusing to
 # start over a version string.
 [tasks."version:json"]
 alias = []
+# Every version answer in this file routes through here -- `version`,
+# `version:tag`, `version:sync --from-git` and `release:prepare` all shell out
+# to it -- so refreshing tags at this one point makes all four correct by
+# construction rather than each remembering to do it.
+depends = ["git:tags:fetch"]
 description = "Print the GitVersion JSON for the working tree, or an empty object"
 hide = true
 run = '''
@@ -754,28 +792,25 @@ stale() {
 # `--from-git` moves the anchor itself, so a release bump is computed rather
 # than hand-edited. Everything below then propagates from it exactly as before.
 #
-# `MajorMinorPatch`, NOT `SemVer`. Two independent reasons, either sufficient:
+# `SemVer`, matching `version:tag`: the project version carries the
+# commits-since-source counter, so `0.1.0-10` and not `0.1.0`. One field feeds
+# both the files and the tag, and neither can drift from the other.
 #
-#   * It CONVERGES. MajorMinorPatch moves only when a bump-keyword commit lands
-#     or a tag is cut, so a `chore:`/`build:` sync commit -- which matches
-#     GitVersion's `no-bump-message` -- leaves it alone and `version:check`
-#     settles. Verified across this branch: MajorMinorPatch held at 0.1.0 over
-#     the `fix:` commit and the two no-bump commits after it, while SemVer moved
-#     every time. SemVer carries CommitsSinceVersionSource and is the trap the
-#     note above describes.
-#   * It is PUBLISHABLE. Everything after the hyphen makes a SemVer PRERELEASE,
-#     and `cargo install` resolves an implicit `*` that never selects one:
-#     `cargo install comply` against 0.0.1-1 fails with "could not find `comply`
-#     in registry `crates-io` with version `*`". A counter-suffixed version
-#     cannot be the version users install.
+# THE COUNTER MAKES THIS SELF-REFERENTIAL, so the release commit must be an
+# AMEND. `CommitsSinceVersionSource` is the commit count -- 10 at HEAD, with
+# `git rev-list --count HEAD` agreeing exactly -- so writing `0.1.0-10` and then
+# adding a NEW commit lands that string at count 11 and the file is stale the
+# instant it is written. `git commit --amend` leaves the count alone and the
+# value stays true. The alternative is to cut the tag immediately, which resets
+# the distance to 0.
 #
-# Per-commit uniqueness is still available where it belongs -- `mise run
-# version` gives the full SemVer for a CI artifact or an image tag, computed at
-# build time and written to no file.
+# Known consequence, accepted deliberately: everything after the hyphen makes
+# this a SemVer PRERELEASE, and `cargo install` resolves an implicit `*` that
+# never selects one, so installs need `--version 0.1.0-10` spelled out.
 if [ "$from_git" = true ]; then
-    computed="$(mise run version:json | jq -r '.MajorMinorPatch // empty')"
+    computed="$(mise run version:json | jq -r '.SemVer // empty')"
     if [ -z "$computed" ]; then
-        echo "version: gitversion produced no MajorMinorPatch; is it installed?" >&2
+        echo "version: gitversion produced no SemVer; is it installed?" >&2
         exit 1
     fi
     if stale "Cargo.toml [workspace.package] version" "$anchor" "$computed"; then
@@ -840,7 +875,7 @@ fi
 shell = "bash -c"
 usage = '''
 flag "--check" help="report drift and exit non-zero instead of writing"
-flag "--from-git" help="move the anchor to GitVersion's MajorMinorPatch first, computing the release bump instead of hand-editing Cargo.toml"
+flag "--from-git" help="move the anchor to GitVersion's SemVer first, computing the release version instead of hand-editing Cargo.toml; amend rather than adding a commit, or the counter goes stale"
 '''
 
 [tasks."version:check"]
@@ -1752,9 +1787,9 @@ set -Eeuo pipefail
 
 checking="${usage_check:-false}"
 
-version="$(mise run version:json | jq -r '.MajorMinorPatch // empty')"
+version="$(mise run version:json | jq -r '.SemVer // empty')"
 if [ -z "$version" ]; then
-    echo "release:prepare: gitversion produced no MajorMinorPatch; is it installed?" >&2
+    echo "release:prepare: gitversion produced no SemVer; is it installed?" >&2
     exit 1
 fi
 
@@ -1773,7 +1808,7 @@ fi
 
 mise run version:sync --from-git
 git cliff --tag "v${version}" --output CHANGELOG.md
-printf 'release prepared: v%s -- review CHANGELOG.md, then commit and `mise run version:tag`\n' "$version"
+printf 'release prepared: v%s -- review CHANGELOG.md, then `git commit --amend` (a NEW commit invalidates the counter) and tag\n' "$version"
 '''
 shell = "bash -c"
 usage = 'flag "--check" help="preview the computed version and changelog entries without writing"'
