@@ -723,6 +723,7 @@ set -Eeuo pipefail
 # Member crates carry `version.workspace = true` and cannot drift at all.
 anchor="$(taplo get -f Cargo.toml '.workspace.package.version')"
 checking="${usage_check:-false}"
+from_git="${usage_from_git:-false}"
 drift=0
 
 # Reads are structured (taplo, jq); writes are anchored substitutions through a
@@ -749,6 +750,43 @@ stale() {
     fi
     return 0
 }
+
+# `--from-git` moves the anchor itself, so a release bump is computed rather
+# than hand-edited. Everything below then propagates from it exactly as before.
+#
+# `MajorMinorPatch`, NOT `SemVer`. Two independent reasons, either sufficient:
+#
+#   * It CONVERGES. MajorMinorPatch moves only when a bump-keyword commit lands
+#     or a tag is cut, so a `chore:`/`build:` sync commit -- which matches
+#     GitVersion's `no-bump-message` -- leaves it alone and `version:check`
+#     settles. Verified across this branch: MajorMinorPatch held at 0.1.0 over
+#     the `fix:` commit and the two no-bump commits after it, while SemVer moved
+#     every time. SemVer carries CommitsSinceVersionSource and is the trap the
+#     note above describes.
+#   * It is PUBLISHABLE. Everything after the hyphen makes a SemVer PRERELEASE,
+#     and `cargo install` resolves an implicit `*` that never selects one:
+#     `cargo install comply` against 0.0.1-1 fails with "could not find `comply`
+#     in registry `crates-io` with version `*`". A counter-suffixed version
+#     cannot be the version users install.
+#
+# Per-commit uniqueness is still available where it belongs -- `mise run
+# version` gives the full SemVer for a CI artifact or an image tag, computed at
+# build time and written to no file.
+if [ "$from_git" = true ]; then
+    computed="$(mise run version:json | jq -r '.MajorMinorPatch // empty')"
+    if [ -z "$computed" ]; then
+        echo "version: gitversion produced no MajorMinorPatch; is it installed?" >&2
+        exit 1
+    fi
+    if stale "Cargo.toml [workspace.package] version" "$anchor" "$computed"; then
+        # `^version = "` matches the [workspace.package] key alone: `rust-version`
+        # does not start the line with `version`, and the dependency entries spell
+        # it inline inside a table.
+        [ "$checking" = true ] || edit Cargo.toml \
+            "s|^(version = \")[^\"]*(\")|\1${computed}\2|"
+    fi
+    anchor="$computed"
+fi
 
 # `cargo publish` rejects a path dependency whose `version` disagrees with the
 # crate it resolves to, so these are load-bearing rather than cosmetic.
@@ -778,13 +816,19 @@ fi
 
 # Markdown restates the version the way `comply version` prints it, with the
 # leading `v`, so the expected string differs from the anchor by that prefix.
+#
+# The `-N` suffix is OPTIONAL in the pattern. It used to be mandatory, which was
+# invisible while every version carried one; the moment `--from-git` writes a
+# release version like 0.1.0 the match fails, `found` comes back empty, the
+# `continue` below fires and the file is silently skipped -- drift that no gate
+# reports.
 for doc in docs/reference/cli.md; do
-    found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+' "$doc" | sort -u | tr '\n' ' ')"
+    found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?' "$doc" | sort -u | tr '\n' ' ')"
     found="${found% }"
     [ -n "$found" ] || continue
     if stale "$doc" "$found" "v${anchor}"; then
         [ "$checking" = true ] || edit "$doc" \
-            "s|v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+|v${anchor}|g"
+            "s|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?|v${anchor}|g"
     fi
 done
 
@@ -794,7 +838,10 @@ if [ "$drift" -ne 0 ]; then
 fi
 '''
 shell = "bash -c"
-usage = 'flag "--check" help="report drift and exit non-zero instead of writing"'
+usage = '''
+flag "--check" help="report drift and exit non-zero instead of writing"
+flag "--from-git" help="move the anchor to GitVersion's MajorMinorPatch first, computing the release bump instead of hand-editing Cargo.toml"
+'''
 
 [tasks."version:check"]
 alias = ["version:drift"]
@@ -1680,6 +1727,56 @@ run = "git cliff --bump --output CHANGELOG.md"
 alias = []
 description = "Generate CHANGELOG.md for an explicit tag, e.g. `mise run changelog:release v0.2.0`"
 run = "git cliff --tag {{arg(name='tag')}} --output CHANGELOG.md"
+
+# The whole bump in one place: compute the next version, write it everywhere,
+# and render the changelog under that heading.
+#
+# GitVersion is the sole authority, and `changelog:bump` above is NOT an
+# alternative to this task. `git cliff --bump` runs its own conventional-commit
+# inference, and on this history the two disagree outright: cliff reads the
+# `v0.0.1-1` prerelease tag and advances its prerelease counter to `v0.0.1-1.1`,
+# missing the `feat:` minor bump that GitVersion resolves to `0.1.0`. Since
+# GitVersion is what `.github/workflows/version.yml` and `publish.yml` act on,
+# a cliff-inferred version would put a changelog heading and a git tag under a
+# number the release pipeline never produces.
+#
+# Neither commits nor tags. `version:tag` cuts the tag, and the commit needs the
+# per-action approval every commit here needs.
+[tasks."release:prepare"]
+alias = ["rp"]
+description = "Compute the next version from GitVersion, write it into every file that restates it, and regenerate CHANGELOG.md under that heading. --check previews without writing"
+run = '''
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+checking="${usage_check:-false}"
+
+version="$(mise run version:json | jq -r '.MajorMinorPatch // empty')"
+if [ -z "$version" ]; then
+    echo "release:prepare: gitversion produced no MajorMinorPatch; is it installed?" >&2
+    exit 1
+fi
+
+if [ "$checking" = true ]; then
+    printf 'next version: %s (currently %s)\n\n' \
+        "$version" "$(taplo get -f Cargo.toml '.workspace.package.version')"
+    # Drift is the EXPECTED state in a preview, so the non-zero exit must not
+    # stop the changelog below, and neither mise's "ERROR task failed" nor the
+    # "run version:sync" hint belongs here -- the command to run is this one.
+    mise run version:sync --from-git --check 2>&1 \
+        | grep -vE 'ERROR task failed|Run .mise run version:sync' || true
+    printf '\n--- CHANGELOG.md entries for v%s ---\n' "$version"
+    git cliff --unreleased --tag "v${version}"
+    exit 0
+fi
+
+mise run version:sync --from-git
+git cliff --tag "v${version}" --output CHANGELOG.md
+printf 'release prepared: v%s -- review CHANGELOG.md, then commit and `mise run version:tag`\n' "$version"
+'''
+shell = "bash -c"
+usage = 'flag "--check" help="preview the computed version and changelog entries without writing"'
 
 # -- Ignore file (gitignore-as-code) --
 
