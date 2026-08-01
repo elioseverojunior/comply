@@ -4,11 +4,7 @@
 
 [package]
 authors.workspace = true
-categories = [
-  "command-line-utilities",
-  "development-tools",
-  "parser-implementations",
-]
+categories = ["command-line-utilities", "development-tools", "parser-implementations"]
 description = "REUSE Specification compliance tool and library: lint, annotate, and fix SPDX license headers"
 documentation = "https://docs.rs/comply"
 edition.workspace = true

@@ -23,6 +23,18 @@ exclude = ["**/target/**", "**/node_modules/**", ".worktrees/**"]
 # crates/comply/Cargo.toml's [features]). taplo is the formatter of record, so
 # it yields on this one point rather than the two fighting forever.
 align_comments = false
+# The same standoff on a second front. cargo-sort collapses an array to one
+# line whatever `compact_arrays` in tomlfmt.toml says -- that key is inert here
+# -- and taplo re-expanded any result wider than `column_width`, so
+# `crates/comply/Cargo.toml`'s 86-character `categories` made cargo-sort warn on
+# every run. taplo yields again: array layout is now the author's, not the
+# formatter's.
+#
+# BOTH keys, not just `array_auto_expand`. Turning expansion off while
+# collapsing stayed on flattened every wrapped array in the repo -- 270 lines,
+# including 126 in `comment-styles.toml`.
+array_auto_collapse = false
+array_auto_expand = false
 indent_string = "  "
 indent_table = true
 reorder_keys = true
