@@ -7,12 +7,10 @@
 
 extends: default
 
-# The YAML test:suite submodule is a conformance corpus full of intentionally
-# malformed fixtures — never lint it (also covers manual `yamllint-rs .` runs).
 # pnpm-lock.yaml and node_modules belong to the dev-only Markdown toolchain and
-# are machine-generated, so they are excluded too.
+# are machine-generated, so they are excluded (this also covers manual
+# `yamllint-rs .` runs).
 ignore: |
-  crates/comply-yaml-test:suite/data/
   pnpm-lock.yaml
   node_modules/
   target/
