@@ -18,34 +18,48 @@ precedence = "aggregate"
 
 [tool.comply]
 # Custom comply settings
-# Markdown is licensed by the `**` aggregate above, so it needs no inline
-# header; these entries are that policy, not a workaround. `comply annotate`
-# now inserts below YAML frontmatter rather than above it, so removing an entry
-# here is safe -- it would gain a header, not lose its frontmatter.
 ignore = [
-  ".actrc",
+  "**/*.ico",
+  "**/*.lock",
+  "**/*.png",
+  "**/*.svg",
+  "**/.actrc",
+  "**/.aider.*/",
   "**/.bun-version",
   "**/.nvmrc",
+  "**/.prettierignore",
   "**/.prettierrc",
+  "**/.remember/",
+  "**/.rumdl_cache/",
+  "**/CHANGELOG.md",
+  "**/RELEASE_NOTE*.md",
+  "**/bench-report/",
+  "**/benchmarks.json",
+  "**/committed.toml",
+  "**/dist/",
+  "**/docker/Dockerfile*",
+  "**/docs/benchmarks/latest.md",
+  "**/docs/index.md",
   "**/favicon*",
+  "**/mutants*/",
+  "**/package*.json",
   "**/package.json",
-  "**/tsconfig*.json",
-  # Symlinks into LICENSES/, so `cargo package` ships the licence texts inside
-  # each published crate. They MUST stay ignored: annotating a symlink writes
-  # through it, which would corrupt the canonical texts every other file cites.
-  "crates/*/LICENSE-*",
+  "**/supply-chain/.cargo-vet/**",
   "**/target/**",
-  "**/*.lock",
+  "**/tsconfig*.json",
   "DCO.txt",
+  "crates/*/LICENSE-*",
 ]
 
-# Neither the built-in tables nor the reference tool claim these two, so
-# `annotate` refuses them rather than guessing a syntax -- declaring it here is
-# the supported answer. Pkl takes `#` line comments despite its `//` docs, and
-# `.gitmessage` is a git commit template, where `#` is what git strips.
 [[tool.comply.comment-styles]]
 close = ""
-extensions = ["pkl"]
 filenames = [".gitmessage"]
 line = ""
 open = "#"
+
+[[tool.comply.comment-styles]]
+close = ""
+extensions = ["pkl"]
+filenames = ["hk.pkl"]
+line = ""
+open = "//"
