@@ -2,8 +2,8 @@
   "extends": ["./tsconfig.base.json"],
   "compilerOptions": {
     // `DOM` on top of the base's `ESNext`: .vitepress code runs in the browser.
-    // Mermaid.vue queries the document and medium-zoom takes an Element, neither
-    // of which type-checks against ESNext alone.
+    // mermaid-theme.ts reads CSS custom properties off `document.documentElement`
+    // through `getComputedStyle`, which does not type-check against ESNext alone.
     "lib": ["ESNext", "DOM"],
     // Vue SFC support -- required for Mermaid.vue to resolve at all.
     "jsx": "preserve",

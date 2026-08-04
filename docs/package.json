@@ -25,7 +25,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:watch": "tsc --noEmit --watch"
   },
-  "Dependencies": {},
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/markdown-it": "14.1.2",
@@ -37,7 +36,6 @@
     "eslint-plugin-import-x": "^4.17.1",
     "globals": "^17.9.0",
     "markdown-it": "14.3.0",
-    "medium-zoom": "1.1.0",
     "mermaid": "^11.16.1",
     "prettier": "^3.9.6",
     "prettier-plugin-organize-imports": "^4.3.0",
