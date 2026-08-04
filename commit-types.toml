@@ -8,7 +8,7 @@
 # the shared subject rules change. Everything else is generated from it:
 #
 #     mise run commit-config         # regenerate the derived files
-#     mise run commit-config:check   # drift guard: fail if any derived file is stale
+#     mise run commit-config-check   # drift guard: fail if any derived file is stale
 #
 # Generated outputs (do not hand-edit the marked regions):
 #   - committed.toml            -> whole file (commit-message linter rules + allowed_types)
