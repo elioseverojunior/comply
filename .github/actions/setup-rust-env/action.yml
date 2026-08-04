@@ -60,6 +60,16 @@ inputs:
     # the Setup job outright. Anything under `# Binaries from mise registries:`
     # in mise.toml is mise's to install, not this action's.
     default: "cargo-binstall"
+  comply-rev:
+    description: >
+      Git revision of elioseverojunior/comply to install. Pinned rather than
+      tracking the default branch so a run is reproducible and the binary cache
+      has something stable to key on. comply IS on crates.io, but only as semver
+      prereleases, which `cargo install` skips -- and its releases carry no
+      binary assets, so cargo-binstall cannot serve it either. Bump this to move
+      it.
+    required: false
+    default: "a4639db7f4a6c509af4f2325a3c513966e6aabe9"
   ignorefile-rev:
     description: >
       Git revision of elioseverojunior/ignorefile to install. Pinned to a rev
@@ -164,7 +174,7 @@ runs:
 
     - name: Setup Rust toolchain
       id: rust-toolchain
-      uses: elioseverojunior/rust-toolchain@0396228bc9e5550518f5b2d2311d7529163df9cb # v0.0.1
+      uses: elioseverojunior/rust-toolchain@365ab4286518f5f3d13c12ed638024bdc86f413b # v0.3.0-1
       with:
         toolchain: ${{ inputs.toolchain }}
         profile: ${{ inputs.profile }}
@@ -184,6 +194,8 @@ runs:
       # script-injection shape GitHub warns about.
       env:
         CARGO_TOOLS: ${{ inputs.cargo-tools }}
+        IGNOREFILE_REV: ${{ inputs.ignorefile-rev }}
+        COMPLY_REV: ${{ inputs.comply-rev }}
       run: |
         cache_key="cargo-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/Cargo.lock') }}"
         echo "cache-key=${cache_key}" >> "$GITHUB_OUTPUT"
@@ -204,7 +216,16 @@ runs:
         # the install step is skipped outright on a cache hit, so without a
         # rotating component a hit would pin these binaries forever. One slow
         # run a week buys a predictable refresh.
-        bin_key="cargo-bin-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-toolchain.outputs.name }}-${tools_hash:0:16}-${{ inputs.ignorefile-rev }}-$(date -u +%G%V)"
+        # Both git-source revs are in the key: this cache carries the ignorefile
+        # AND comply binaries, and their install steps are skipped on a hit. A
+        # key that named only one would keep serving a stale build of the other
+        # after its pin moved.
+        if command -v sha256sum >/dev/null 2>&1; then
+          revs_hash="$(printf '%s-%s' "$IGNOREFILE_REV" "$COMPLY_REV" | sha256sum)"
+        else
+          revs_hash="$(printf '%s-%s' "$IGNOREFILE_REV" "$COMPLY_REV" | shasum -a 256)"
+        fi
+        bin_key="cargo-bin-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-toolchain.outputs.name }}-${tools_hash:0:16}-${revs_hash:0:16}-$(date -u +%G%V)"
         echo "cargo-bin-key=${bin_key}" >> "$GITHUB_OUTPUT"
 
     - name: Setup Rust cache
@@ -264,15 +285,37 @@ runs:
           --rev "${REV}" \
           ignorefile-cli
 
+    # Same reasoning as ignorefile above, and the same guard. comply drives
+    # hk.pkl's `comply`, `comply-fix` and `comply-format` steps, which cicd.yml's
+    # lint job reaches through `hk check --all`; without it that gate fails with
+    # `comply: command not found`.
+    #
+    # It used to sit in mise.toml's [tools] as a `cargo:` git entry. cargo-binstall
+    # cannot serve a git source, so `mise install` compiled it from scratch in
+    # every job -- around 3.5 minutes each. Run 30706537351 spent 7m19s inside
+    # `mise install --locked` and was cancelled still compiling. Installed here it
+    # is built once per cache miss instead of once per job.
+    - name: Install comply (git source; no binstallable release assets)
+      if: ${{ steps.cargo-bin.outputs.cache-hit != 'true' }}
+      shell: bash
+      env:
+        REV: ${{ inputs.comply-rev }}
+      run: |
+        set -Eeuo pipefail
+        cargo install --locked \
+          --git https://github.com/elioseverojunior/comply \
+          --rev "${REV}" \
+          comply
+
     - name: Install cargo tools
       if: ${{ inputs.cargo-tools != '' && steps.cargo-bin.outputs.cache-hit != 'true' }}
-      uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+      uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
       with:
         tool: |
           ${{ inputs.cargo-tools }}
 
     - name: Setup mise
-      uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+      uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
       with:
         cache_key_prefix: mise
         cache_key: mise-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/mise.lock') || hashFiles('**/mise.toml') }}
