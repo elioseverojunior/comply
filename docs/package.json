@@ -1,6 +1,6 @@
 {
   "name": "comply-docs",
-  "version": "0.1.0-9",
+  "version": "0.1.1",
   "private": true,
   "description": "Documentation site for comply, a REUSE compliance tool in pure Rust",
   "license": "MIT OR Apache-2.0",

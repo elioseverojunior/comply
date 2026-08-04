@@ -435,7 +435,7 @@ what this build accepts.
 | `-o`, `--output <plain\|json\|toml>` | Output format. Defaults to `plain`.                     |
 
 ```sh
-comply version                 # v0.1.0-9
+comply version                 # v0.1.1
 comply version --full          # provenance + the gitversion stamp
 comply version --full -o json  # machine-readable
 ```
