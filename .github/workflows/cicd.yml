@@ -13,6 +13,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Perform a dry run without publishing"
+        required: false
+        type: boolean
+        default: false
 
 permissions: read-all
 
@@ -132,13 +139,13 @@ jobs:
       # codeql.yml so the two produce comparable results -- that workflow keeps
       # the full `[rust, nodejs]` matrix on its weekly schedule.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           languages: rust
           queries: +security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           category: "/language:rust"
 
@@ -192,7 +199,7 @@ jobs:
       - name: Run tests with coverage
         env:
           RUST_COVERAGE_THRESHOLD: ${{ vars.RUST_COVERAGE_THRESHOLD || '100' }}
-        run: mise run coverage:tarpaulin
+        run: mise run coverage
 
       # `always()` means this runs even when coverage failed, where lcov.info was
       # never written -- the bare command then failed too and buried the real
@@ -238,7 +245,17 @@ jobs:
     # `version` as well as `tests`: a job can only read `needs.<job>.outputs` from
     # a DIRECT dependency, so anything here that stamps the version has to name it
     # even though `release` does too.
-    needs: [tests, version]
+    # `setup`/`version` only. `build` consumes nothing from `tests` -- no
+    # artifact passes between them -- so waiting on it served no purpose beyond
+    # serialising the two longest jobs. `release` below now depends on both, so
+    # the gate is unchanged: a failing test still blocks the release.
+    needs: [setup, version, lint, sast]
+    if: >
+      success()
+      && needs.setup.result == 'success'
+      && needs.version.result == 'success'
+      && needs.lint.result == 'success'
+      && needs.sast.result == 'success'
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     steps:
       - name: Checkout
@@ -260,8 +277,24 @@ jobs:
         run: |
           set -eo pipefail
 
-          echo "::group::cargo build --release"
-          cargo build --release --locked --workspace
+          # `--all-features` is load-bearing, not belt-and-braces. The `comply`
+          # bin declares `required-features = ["cli"]` and `cli` is NOT in that
+          # crate's `default`, so a plain `--workspace` build silently skips it
+          # -- cargo does not warn, it just produces no binary. The smoke test
+          # below derives its list from `cargo metadata`, which reports EVERY bin
+          # target regardless of feature gating, so the two disagreed and the job
+          # died on `./target/release/comply: No such file or directory` (127).
+          #
+          # Building all features keeps the invariant the smoke test assumes --
+          # "every bin cargo metadata reports has been built" -- true by
+          # construction, including for any future feature-gated binary. Safe
+          # here because `comply` is the only crate with features and they are
+          # purely additive (ast/cst/serde/schema/cli), with no mutually
+          # exclusive pair to resolve. `--locked` still holds: the optional CLI
+          # dependencies (clap, anstream, tracing-subscriber, ...) are already
+          # pinned in Cargo.lock.
+          echo "::group::cargo build --release --all-features"
+          cargo build --release --locked --workspace --all-features
           echo "::endgroup::"
 
       # `comply-wasm` exists to be compiled for `wasm32-unknown-unknown`, and the
@@ -285,22 +318,54 @@ jobs:
           cargo build --locked -p comply-wasm --target wasm32-unknown-unknown
           echo "::endgroup::"
 
-      # The gates above prove the code is correct; this proves the artefact runs.
+      # The gates above prove the code is correct; this proves the artefacts run.
       # `profile.release` sets `panic = "abort"`, `lto = "fat"` and `opt-level =
       # "z"`, none of which the test profile exercises -- so a release binary can
       # fail to start while every test passes.
-      - name: Smoke-test the binary
+      #
+      # The binary list is DISCOVERED from cargo metadata rather than written out
+      # here. This step previously named a single binary as a literal string,
+      # which is how it survived the rename to `comply` untouched and broke: a
+      # stale name in a shell string is invisible to cargo, clippy and rustfmt.
+      # Deriving it means adding or renaming a binary can never leave this step
+      # behind again. `select(.publish != [])` skips any crate marked
+      # `publish = false`, which is not a release artefact by definition.
+      - name: Smoke-test the release binaries
         shell: bash -l {0}
         run: |
           set -eo pipefail
 
-          echo "::group::comply version"
-          ./target/release/comply version --full
-          echo "::endgroup::"
+          mapfile -t BINS < <(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.publish != []) | .targets[]
+                     | select(.kind[] == "bin") | .name' | sort -u)
 
-          echo "::group::comply lint (self-check)"
-          ./target/release/comply lint
-          echo "::endgroup::"
+          if [ "${#BINS[@]}" -eq 0 ]; then
+            echo "::error::no publishable bin targets found; smoke test would be a no-op"
+            exit 1
+          fi
+
+          # `--help` is safe for every publishable bin target because clap
+          # answers it at the top level, before any subcommand dispatch runs --
+          # so no per-binary special-casing is needed, and a subcommand that
+          # blocks on stdin can never be what this smoke test invokes.
+          for BIN in "${BINS[@]}"; do
+            echo "::group::${BIN}"
+
+            # Checked explicitly so a missing binary names its own cause. Without
+            # this the invocation below runs a path that does not exist and bash
+            # exits 127 with nothing but "No such file or directory", which reads
+            # like a broken runner rather than a build/metadata disagreement --
+            # the real cause is a bin whose `required-features` the build step
+            # did not enable.
+            if [ ! -x "./target/release/${BIN}" ]; then
+              echo "::error::${BIN} is a bin target in cargo metadata but was not built. If it declares required-features, the build step must enable them (it uses --all-features)."
+              exit 1
+            fi
+
+            "./target/release/${BIN}" --help
+
+            echo "::endgroup::"
+          done
 
       - name: Assert no changes on git tree
         shell: bash -l {0}
@@ -320,9 +385,13 @@ jobs:
   # ──────────────────────────────────────────────
   release:
     name: Release
-    needs: [build, version]
+    needs: [tests, build, version]
     if: >
-      github.ref_name == github.event.repository.default_branch
+      success()
+      && needs.tests.result == 'success'
+      && needs.build.result == 'success'
+      && needs.version.result == 'success'
+      && github.ref_name == github.event.repository.default_branch
       && github.event_name == 'push'
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     permissions:
@@ -436,8 +505,8 @@ jobs:
           }
           echo "::endgroup::"
 
-          echo "::group::Tagging Version v${{ needs.version.outputs.version }}"
-          tagger "v${{ needs.version.outputs.version }}"
+          echo "::group::Tagging Version v${{ needs.version.outputs.semVer }}"
+          tagger "v${{ needs.version.outputs.semVer }}"
           echo "::endgroup::"
 
           if [[ "${{ github.ref_name  }}" == "${{ github.event.repository.default_branch }}" && "${{ github.event_name }}" != "pull_request" ]];
@@ -455,142 +524,6 @@ jobs:
             echo "::endgroup::"
           fi
           echo "::endgroup::"
-
-      - name: Versions
-        id: versions
-        shell: bash -l {0}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
-        run: |
-          echo "::group::Latest Released Tags Output"
-          # Latest GitHub release — the full-semver entry created by
-          # the `gh release create` step on previous runs. `gh release
-          # view` (no arg) resolves to the latest release by published
-          # date. Exits non-zero when there are no releases yet; the
-          # `|| true` fallback keeps the variable empty without failing
-          # the step. On first-ever release, both variables below stay
-          # empty strings — the Build Changelog step's `fromTag` input
-          # accepts empty (action auto-detects or uses empty_template).
-          RELEASED_RELEASE_DESC=$(
-            gh release view \
-              --json tagName,isPrerelease,publishedAt \
-              --jq '"\(.tagName) [\(if .isPrerelease then "prerelease" else "stable" end), \(.publishedAt)]"' \
-              2>/dev/null || echo "(no releases yet)"
-          )
-          echo "Latest GitHub release: ${RELEASED_RELEASE_DESC}"
-
-          echo ""
-          # Rolling umbrella tags are force-pushed on every release by
-          # the Tag step. They exist as git tags WITHOUT corresponding
-          # `gh release` entries, so we enumerate them via `git tag -l`
-          # + semver-pattern filters. Tags were fetched during Checkout
-          # (`fetch-tags: true`).
-          echo "Rolling umbrella tags (git-only, no GitHub release):"
-          ALL_TAGS=$(git tag -l 'v*' --sort=-v:refname 2>/dev/null || true)
-          RELEASED_SEMVER_GIT=$(printf '%s\n' "${ALL_TAGS}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$' | head -1)
-          RELEASED_MMP=$(printf '%s\n' "${ALL_TAGS}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-          RELEASED_MM=$(printf  '%s\n' "${ALL_TAGS}" | grep -E '^v[0-9]+\.[0-9]+$' | head -1)
-          RELEASED_M=$(printf   '%s\n' "${ALL_TAGS}" | grep -E '^v[0-9]+$' | head -1)
-          echo "  SemVer:          ${RELEASED_SEMVER_GIT:-none}"
-          echo "  MajorMinorPatch: ${RELEASED_MMP:-none}"
-          echo "  MajorMinor:      ${RELEASED_MM:-none}"
-          echo "  Major:           ${RELEASED_M:-none}"
-          echo "::endgroup::"
-
-          echo "::group::GitVersion Tags Output"
-          LATEST_SEMVER="v${{ needs.version.outputs.version }}"
-          LATEST_MMP="v${{ needs.version.outputs.majorMinorPatch }}"
-          LATEST_MM="v${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}"
-          LATEST_M="v${{ needs.version.outputs.major }}"
-
-          echo ""
-          echo "  SemVer:          ${LATEST_SEMVER:-none}"
-          echo "  MajorMinorPatch: ${LATEST_MMP:-none}"
-          echo "  MajorMinor:      ${LATEST_MM:-none}"
-          echo "  Major:           ${LATEST_M:-none}"
-          echo "::endgroup::"
-
-          echo "::group::Relased Configuration"
-          # Step outputs consumed by subsequent steps (Build Changelog
-          # uses released-semver for fromTag, next-semver for toTag).
-          # On first-ever release, released-semver is empty — callers
-          # must handle that (mikepenz/release-changelog-builder-action
-          # treats empty fromTag as "auto-detect" and falls back to
-          # the config's empty_template if no PRs are found).
-          # We use the git tag (RELEASED_SEMVER_GIT) rather than the
-          # GitHub release tag (RELEASED_SEMVER_TAG) so that releases
-          # work even before the first gh release create succeeds.
-          IS_FIRST_RELEASE="false"
-          if [[ -z "${RELEASED_SEMVER_GIT}" ]]; then
-            IS_FIRST_RELEASE="true"
-          fi
-          {
-            echo "released-semver=${RELEASED_SEMVER_GIT:-}"
-            echo "next-semver=v${{ needs.version.outputs.version }}"
-            echo "is-first-release=${IS_FIRST_RELEASE}"
-          } >> "$GITHUB_OUTPUT"
-          echo "::endgroup::"
-
-      - name: Build Changelog
-        id: changelog
-        if: ${{ github.ref_name == github.event.repository.default_branch && steps.versions.outputs.is-first-release != 'true' }}
-        uses: mikepenz/release-changelog-builder-action@c9bcd8238b6f41e05561348339429d360b1c0247 # v6.2.3
-        with:
-          configuration: changelog-configuration.json
-          # `fromTag` is the git tag of the PREVIOUS semver release (computed
-          # from `git tag -l` in the Versions step). On the first-ever release
-          # this is empty — the action treats an empty fromTag as "no lower
-          # bound" and falls back to the config's `empty_template` when no
-          # PRs are found. Using the git tag (not the GitHub release tag)
-          # works even before the first `gh release create` succeeds.
-          fromTag: ${{ steps.versions.outputs.released-semver }}
-          toTag: ${{ steps.versions.outputs.next-semver }}
-          # Include pre-releases in the changelog range. Pre-release
-          # entries (e.g. v1.2.3-beta.1) count as "released" for the
-          # purpose of computing the diff from the previous release.
-          ignorePreReleases: "false"
-          # HYBRID mode: fetch merged PRs for their rich metadata
-          # (number, title, labels, author) AND include raw commits
-          # between tags that didn't land via PR. Matters for this
-          # repo because historical commits on main include direct
-          # pushes the default PR mode misses entirely — see run
-          # 24697992060, which emitted "No pull requests found"
-          # against a range of 8 real commits. With HYBRID, those
-          # commits appear as entries via their commit title (the
-          # same `label_extractor` regexes apply: feat:, fix:, chore:,
-          # test:, docs:, deps:), while future PR merges still get
-          # their PR-link template applied. Per upstream docs:
-          # "Hybrid mode treats commits like pull requests" —
-          # acceptable for this repo because we control the template
-          # and category mapping via changelog-configuration.json.
-          mode: "HYBRID"
-          # Use the GitHub App token (same identity that creates the
-          # release) so the action's PR lookups inherit the App's
-          # pulls:read permission and rate limit.
-          token: ${{ secrets.GITHUB_TOKEN || github.token }}
-          # Write the rendered changelog to a file at the repo root
-          # (relative to the checkout dir, per the action's docs).
-          # The Release step consumes it via `gh release create -F <file>`
-          # rather than piping through a multi-line env var — avoids
-          # both shell-escaping gotchas with the 4 KB+ markdown body
-          # AND GitHub Actions' 1 MB limit on `outputs.*` values when
-          # the changelog grows large. File is .gitignore'd.
-          outputFile: RELEASE_NOTES.md
-          # Keep failing on resolution errors (malformed config,
-          # unreachable tags, etc.) — the first-release empty-range
-          # case is handled by the config's empty_template, not by
-          # swallowing errors here.
-          failOnError: true
-
-      - name: Generate First Release Notes
-        id: first-release-notes
-        if: ${{ github.ref_name == github.event.repository.default_branch && steps.versions.outputs.is-first-release == 'true' }}
-        run: |
-          # For the very first release, there's no previous tag to diff
-          # against. The changelog action would auto-detect the initial
-          # commit and compare it to itself (same SHA), causing a 404.
-          # Instead, write the configured empty_template directly.
-          echo "No changes in this release" > RELEASE_NOTES.md
 
       - name: Find Associated PR
         id: find-pr
@@ -618,13 +551,14 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN || github.token }}
           script: |
-            const semVer = `v${{ needs.version.outputs.version }}`;
+            const version = `v${{ needs.version.outputs.version }}`;
+            const semVer = `v${{ needs.version.outputs.semVer }}`;
             const major = `${{ needs.version.outputs.major }}`;
             const minor = `${{ needs.version.outputs.minor }}`;
             const patch = `${{ needs.version.outputs.patch }}`;
             const shortSha = `${{ needs.version.outputs.shortSha }}`;
             const branch = `${{ steps.working-branch.outputs.branch }}`;
-            const tagUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/tree/${semVer}`;
+            const tagUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/tree/${version}`;
 
             const actor = `${{ github.actor }}`;
             const actorUrl = `${context.serverUrl}/${actor}`;
@@ -685,6 +619,31 @@ jobs:
               });
             }
 
+      - name: Generate release notes
+        if: ${{ github.ref_name == github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # Build the release body from the conventional-commit history with the
+          # SAME renderer that writes CHANGELOG.md, rather than `gh
+          # --generate-notes`. Those produced different documents for the same
+          # release: `--generate-notes` lists merged PRs with no awareness of
+          # cliff.toml's commit-type grouping, so the release page and the
+          # changelog disagreed on both content and shape.
+          #
+          # `--latest` is the range selector that limits output to ONE release
+          # section. Without it the entire history renders into the body, and
+          # `--tag` alone only *labels* unreleased commits, it does not filter.
+          # The `Tag` step earlier in this job already pushed vX.Y.Z, and
+          # cliff.toml's `tag_pattern` matches only full versions (the floating
+          # v<major> / v<major>.<minor> tags are excluded), so `--latest`
+          # resolves unambiguously to this release.
+          #
+          # `--strip header` drops the changelog's global header so only this
+          # release's grouped sections and the compare-link footer land here.
+          mise run changelog --latest --strip header --output RELEASE_NOTES.md
+
       - name: Create GitHub Release
         if: ${{ github.ref_name == github.event.repository.default_branch }}
         shell: bash
@@ -702,10 +661,19 @@ jobs:
             gh release delete --yes "${draft}"
           done
 
+          # The generate step above always writes RELEASE_NOTES.md on success,
+          # so missing-or-empty here means it was skipped or failed. Bail now
+          # rather than publish a release with an empty body -- `gh release
+          # create` accepts an empty notes file without complaint.
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::RELEASE_NOTES.md is missing or empty. Did the 'Generate release notes' step run?"
+            exit 1
+          fi
+
           # Create release targeting the working branch
           gh release create "v${{ needs.version.outputs.version }}" \
             --target "${{ steps.working-branch.outputs.branch }}" \
-            --generate-notes \
+            --notes-file RELEASE_NOTES.md \
             --verify-tag \
             --latest
 
@@ -723,6 +691,7 @@ jobs:
   publish:
     name: Publish
     needs: [release]
+    if: ${{ success() && needs.release.result == 'success' && github.ref_name == github.event.repository.default_branch }}
     permissions:
       actions: read
       contents: write
@@ -731,4 +700,15 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       version: ${{ needs.release.outputs.version }}
+      # EXPLICIT, because `dry-run` defaults to `true` in publish.yml and that
+      # default is deliberate -- the gate there fails closed, so it publishes only
+      # on an explicit "false" and any other value (including the empty string a
+      # trigger without inputs produces) is treated as a dry run.
+      #
+      # Omitting this key therefore did not mean "use the caller's intent", it
+      # meant "never publish": the whole release path ran green while uploading
+      # nothing. This job is already reachable only from a push to the default
+      # branch (see the `release` job it needs), which is exactly the condition
+      # under which a release SHOULD reach crates.io.
+      dry-run: ${{ inputs.dry-run || false }}
     secrets: inherit
