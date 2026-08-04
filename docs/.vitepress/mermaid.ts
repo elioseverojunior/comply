@@ -57,7 +57,8 @@ export const mermaidMarkdown = (md: MarkdownRenderer): void => {
  *
  * The list is every `dayjs/plugin/*` mermaid imports. It is one longer than the
  * equivalent list in `vitepress-plugin-mermaid`, which omits `duration` and so
- * breaks any gantt chart under `docs:dev` -- this site has one, in architecture.md.
+ * breaks any gantt chart under `docs:dev`. This site has no gantt today, but the
+ * omission is the kind that only surfaces when someone adds one.
  */
 export const mermaidVite = {
   // Mermaid's own chunk is ~650 kB (its core plus the langium parser), which
