@@ -8,6 +8,7 @@ description = "Browser bindings for comply, the REUSE compliance tool"
 edition.workspace = true
 license.workspace = true
 name = "comply-wasm"
+readme = "README.md"
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
