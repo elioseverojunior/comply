@@ -18,6 +18,7 @@ permissions:
   contents: read
 
 env:
+  REPO_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
   CARGO_TERM_COLOR: always
   # `mise run` installs [tools] before every task, which overrides mise-action's
   # `install: false`: the Supply Chain job spent 8m57s having `mise run comply`
@@ -64,7 +65,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
           token: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       - name: Checkout (act copies the working tree)

@@ -72,6 +72,7 @@ env:
   # cargo-llvm-cov now arrives prebuilt via setup-rust-env, so the coverage task
   # has no reason to provision anything itself.
   MISE_TASK_RUN_AUTO_INSTALL: false
+  REPO_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
 
 jobs:
   # Proves [tools] and mise.lock still resolve -- nothing else would catch a
@@ -94,7 +95,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
           token: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       # setup-rust-env runs jdx/mise-action itself, keyed on mise.lock/mise.toml.
