@@ -11,7 +11,7 @@
 # action inputs.
 
 # Self-hosted runner labels actionlint should treat as valid in `runs-on:`.
-# Every job uses `runs-on: ${{ vars.RUNS_ON }}` — a dynamic expression — so
+# Every job uses `runs-on: ${{ vars.RUNS_ON }}` -- a dynamic expression -- so
 # actionlint cannot resolve the label statically and skips the runner-label
 # check for those jobs anyway. `arc-runner-set` is registered here as the
 # Actions Runner Controller (ARC) scale-set label `RUNS_ON` resolves to, so any
@@ -29,6 +29,11 @@ self-hosted-runner:
 config-variables:
   - RUNS_ON
   - RUNS_ON_ARM64
+  # GitHub App client ID, paired with the APP_PRIVATE_KEY secret to mint
+  # installation tokens. A variable rather than a secret because it identifies
+  # the app without authenticating as it, and because `vars` is readable from a
+  # job-level `env:` that a step `if:` can then gate on.
+  - APP_CLIENT_ID
   - RUST_COVERAGE_THRESHOLD
   # Not a GitHub repository variable: `mise run act:setup` writes it into
   # `.act/.vars`, which `.actrc` passes with `--var-file`, so only a local act
