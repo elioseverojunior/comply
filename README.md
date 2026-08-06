@@ -10,7 +10,6 @@ REUSE compliance tool in pure Rust -- check and enforce the
 [REUSE Specification](https://reuse.software/spec/) for software licensing.
 
 [![CI](https://github.com/elioseverojunior/comply/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/elioseverojunior/comply/actions/workflows/ci.yml)
-[![Mise](https://github.com/elioseverojunior/comply/actions/workflows/mise.yml/badge.svg?branch=main)](https://github.com/elioseverojunior/comply/actions/workflows/mise.yml)
 [![CodeQL](https://github.com/elioseverojunior/comply/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/elioseverojunior/comply/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/elioseverojunior/comply/badge)](https://scorecard.dev/viewer/?uri=github.com/elioseverojunior/comply)
 
@@ -34,8 +33,8 @@ to WASM for browser use.
   safety by construction.
 - **Native Rust** -- no Python runtime dependency. Single static binary.
 - **WASM target** -- run compliance checks in the browser.
-- **LSP support** -- real-time compliance feedback in VS Code, Neovim, Emacs.
-- **MCP support** -- AI-assisted compliance via the Model Context Protocol.
+- **LSP support** -- real-time compliance feedback in VS Code, Neovim, Emacs. (feature)
+- **MCP support** -- AI-assisted compliance via the Model Context Protocol. (feature)
 
 ### How it differs from the Python reuse-tool
 
