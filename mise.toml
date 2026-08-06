@@ -2664,6 +2664,136 @@ alias = []
 description = "cargo clean (removes target/)"
 run = "cargo clean"
 
+# -- GitHub App credentials --
+
+# Pushes the GitHub App credentials from the SOPS store into this repository, so
+# `actions/create-github-app-token` can mint an installation token per run and no
+# long-lived credential is stored anywhere but the encrypted file.
+#
+# The SPLIT between a variable and secrets is not cosmetic. `client-id` is
+# public -- it identifies the app, it appears in the workflow file, and GitHub
+# masks secrets in logs, so storing it as a secret would turn every incidental
+# log line containing it into `***`. `pem_file` and `client_secret` are the
+# actual credentials.
+#
+# `client_id`, NOT `id`: `actions/create-github-app-token` marks `app-id` with
+# `deprecationMessage: "Use 'client-id' instead."` in its own action.yml. The
+# SOPS record carries both, and `id` (4348245) is the one that must NOT be used.
+[tasks."gh:app:sync"]
+alias = ["gas", "gh:app:secrets"]
+description = "Decrypt the SOPS secret store and push the GitHub App credentials to this repository as the APP_CLIENT_ID variable plus APP_PRIVATE_KEY and APP_CLIENT_SECRET secrets. Pass --check to report without writing"
+hide = true
+run = '''
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+# DELIBERATELY no `set -x` under --verbose, unlike every other task here. The
+# values below are the app's private key and client secret; tracing the commands
+# that handle them would print both to the terminal and into any CI log. The
+# flag reports names and byte counts instead, which is enough to tell "the key
+# is empty" from "the key is wrong" without disclosing either.
+verbose="${usage_verbose:-false}"
+checking="${usage_check:-false}"
+
+store="${usage_store:-${HOME}/dotfiles/secrets/sops/secrets.enc.yaml}"
+if [ ! -f "${store}" ]; then
+    echo "gh:app:sync: no SOPS store at ${store}" >&2
+    exit 1
+fi
+
+for tool in sops yq gh; do
+    command -v "${tool}" >/dev/null 2>&1 || {
+        echo "gh:app:sync: ${tool} is not installed" >&2
+        exit 1
+    }
+done
+
+# Resolved, not hardcoded, for the reason `gh:branch:protect` resolves its own:
+# a hardcoded owner writes this repository's credentials into whatever fork or
+# rename happens to be checked out.
+repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+owner="${repo%%/*}"
+
+# One decrypt, into a directory only this user can read. Piping sops straight
+# into a loop would decrypt once per field and prompt for the key each time;
+# writing to $TMPDIR without the mode change would leave the plaintext
+# world-readable for as long as the task runs.
+work="$(mktemp -d)"
+chmod 700 "${work}"
+trap 'rm -rf "${work}"' EXIT
+
+plain="${work}/plain.yaml"
+( umask 077; sops -d "${store}" > "${plain}" )
+
+path=".github.\"${owner}\".app_auth"
+if [ "$(yq -r "${path} // \"null\"" "${plain}")" = "null" ]; then
+    echo "gh:app:sync: ${store} has no github.${owner}.app_auth entry" >&2
+    exit 1
+fi
+
+# Written to files rather than shell variables, and fed to `gh` on STDIN. A
+# `--body "$value"` would put the private key in the process argument list,
+# where `ps` shows it to every other process on the machine. Files also preserve
+# the PEM's bytes exactly: a `$(...)` capture strips trailing newlines, and the
+# key must round-trip unchanged.
+extract() {
+    yq -r "${path}.${1} // \"\"" "${plain}" > "${work}/${1}"
+}
+extract client_id
+extract client_secret
+extract pem_file
+
+for field in client_id client_secret pem_file; do
+    if [ ! -s "${work}/${field}" ]; then
+        echo "gh:app:sync: github.${owner}.app_auth.${field} is empty" >&2
+        exit 1
+    fi
+done
+
+# A private key that is not a private key is worth catching here rather than at
+# the first workflow run, where it surfaces as an opaque token-minting failure.
+if ! grep -q 'BEGIN .*PRIVATE KEY' "${work}/pem_file"; then
+    echo "gh:app:sync: github.${owner}.app_auth.pem_file is not a PEM private key" >&2
+    exit 1
+fi
+
+if [ "${verbose}" = true ]; then
+    echo "repo:  ${repo}"
+    echo "store: ${store}"
+    for field in client_id client_secret pem_file; do
+        printf '  %-14s %s bytes\n' "${field}" "$(wc -c < "${work}/${field}" | tr -d ' ')"
+    done
+fi
+
+if [ "${checking}" = true ]; then
+    echo "would set variable APP_CLIENT_ID     from github.${owner}.app_auth.client_id"
+    echo "would set secret   APP_PRIVATE_KEY   from github.${owner}.app_auth.pem_file"
+    echo "would set secret   APP_CLIENT_SECRET from github.${owner}.app_auth.client_secret"
+    echo
+    echo "currently set on ${repo}:"
+    gh variable list --repo "${repo}" 2>/dev/null | grep -E '^APP_' || echo "  (no APP_ variables)"
+    gh secret list --repo "${repo}" 2>/dev/null | grep -E '^APP_' || echo "  (no APP_ secrets)"
+    exit 0
+fi
+
+gh variable set APP_CLIENT_ID --repo "${repo}" < "${work}/client_id"
+gh secret set APP_PRIVATE_KEY --repo "${repo}" < "${work}/pem_file"
+gh secret set APP_CLIENT_SECRET --repo "${repo}" < "${work}/client_secret"
+
+# Names only: GitHub never returns a secret value, so this confirms the write
+# landed without pretending to verify the contents.
+echo "synced to ${repo}:"
+gh variable list --repo "${repo}" | grep -E '^APP_' || true
+gh secret list --repo "${repo}" | grep -E '^APP_' || true
+'''
+shell = "bash -c"
+usage = '''
+flag "-v --verbose" help="Report the resolved repo, store path and per-field byte counts (never the values)"
+flag "--check" help="Report what would be pushed, and what is already set, without writing"
+flag "--store <store>" help="Path to the SOPS-encrypted store (default: ~/dotfiles/secrets/sops/secrets.enc.yaml)"
+'''
+
 # -- Branch Protection --
 [tasks."gh:branch:protect"]
 alias = ["bp"]
