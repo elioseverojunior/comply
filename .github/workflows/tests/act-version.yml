@@ -15,7 +15,8 @@ on:
   pull_request:
     branches: [main]
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   # mise.toml's [env] does `GITHUB_TOKEN = {{env.GITHUB_TOKEN | default(value='')}}`,
@@ -43,7 +44,7 @@ jobs:
     needs: [version]
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     permissions:
-      actions: write
+      actions: read
       contents: read
     steps:
       # Exercises the composed JSON against the action's REAL outputs. The jq in

@@ -48,10 +48,11 @@ on:
   #     - ".github/workflows/performance.yml"
   workflow_dispatch:
 
+# Read-only at the top level: a workflow-wide write is granted to EVERY job in
+# the file, including any added later that has no business holding it. The three
+# writes the benchmark needs are declared on the job that needs them.
 permissions:
-  contents: write       # required to push the updated baseline to gh-pages
-  pull-requests: write  # required to post the comparison comment on PRs
-  deployments: write    # required by benchmark-action for environments
+  contents: read
 
 concurrency:
   group: perf-${{ github.workflow }}-${{ github.ref }}
@@ -66,6 +67,10 @@ jobs:
     name: Bench vs main baseline
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 45
+    permissions:
+      contents: write # push the updated baseline to gh-pages
+      pull-requests: write # post the comparison comment on PRs
+      deployments: write # benchmark-action creates a deployment environment
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

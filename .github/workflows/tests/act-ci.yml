@@ -14,7 +14,8 @@ on:
   pull_request:
     branches: [main]
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -41,7 +42,7 @@ jobs:
     name: Tests
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     permissions:
-      actions: write
+      actions: read
       contents: read
     steps:
       # Two steps, because a YAML key cannot be conditionally omitted. act
