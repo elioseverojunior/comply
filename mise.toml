@@ -2796,6 +2796,64 @@ description = "Serve the built docs site, to check the production build before p
 dir = "docs"
 run = "bun run preview"
 
+[tasks."docs:coverage"]
+alias = ["dc", "docs:cov"]
+description = "Gate rustdoc documentation coverage -- the metric docs.rs prints on the crate page. Distinct from the test coverage in tarpaulin.toml"
+run = '''
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+if [ "${usage_verbose:-false}" = "true" ]; then set -x; fi
+
+threshold="${usage_threshold:-100}"
+package="${usage_package:-comply}"
+
+# `--output-format json`, not the human table: the table ROUNDS to one decimal,
+# so it reports 89.4% where the real figure is 89.3939% -- fine to read, wrong to
+# compare against a threshold. The JSON carries per-file `total` and `with_docs`
+# counts, so the percentage is computed here from integers.
+#
+# RUSTC_BOOTSTRAP because `--show-coverage` is gated behind `-Z
+# unstable-options` on EVERY channel, nightly included -- switching toolchains
+# does not avoid it. The bootstrap variable makes the pinned stable accept `-Z`,
+# which is the same mechanism tarpaulin uses to build doctests here, and it is
+# why this gate needs no second toolchain.
+json="$(RUSTC_BOOTSTRAP=1 cargo rustdoc -p "${package}" --all-features -- \
+    -Z unstable-options --show-coverage --output-format json 2>/dev/null \
+    | grep -E '^\{' | tail -1)"
+
+if [ -z "${json}" ]; then
+    echo "docs:coverage: rustdoc produced no coverage JSON for ${package}" >&2
+    exit 1
+fi
+
+documented="$(printf '%s' "${json}" | jq '[.[].with_docs] | add')"
+total="$(printf '%s' "${json}" | jq '[.[].total] | add')"
+
+# awk, because the shell has no floats and the comparison must not round.
+pct="$(awk -v d="${documented}" -v t="${total}" 'BEGIN { printf "%.2f", (t == 0 ? 100 : d * 100 / t) }')"
+
+printf 'documentation coverage: %s%% (%s/%s items)\n' "${pct}" "${documented}" "${total}"
+
+if awk -v p="${pct}" -v t="${threshold}" 'BEGIN { exit !(p + 0 < t + 0) }'; then
+    # The undocumented items are listed rather than just counted: a bare
+    # percentage says a gate failed, this says where to go.
+    echo "docs:coverage: below the ${threshold}% threshold. Undocumented items by file:" >&2
+    printf '%s' "${json}" \
+        | jq -r 'to_entries[] | select(.value.with_docs < .value.total)
+                 | "\(.value.total - .value.with_docs)\t\(.key)"' \
+        | sort -rn \
+        | awk -F'\t' '{ printf "  %3d missing  %s\n", $1, $2 }' >&2
+    exit 1
+fi
+'''
+shell = "bash -c"
+usage = '''
+flag "-v --verbose" help="Trace each command before running it (set -x)"
+flag "-t --threshold <threshold>" help="Minimum documentation coverage percentage" default="100" env="DOC_COVERAGE_THRESHOLD"
+flag "-p --package <package>" help="Package to document" default="comply"
+'''
+
 # -- Clean --
 
 [tasks.clean]
