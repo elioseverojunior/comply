@@ -1858,6 +1858,127 @@ flag "--strip <part>" help="Drop part of the rendered output: header, footer or 
 flag "-o --output <path>" help="Write somewhere other than CHANGELOG.md, e.g. RELEASE_NOTES.md"
 '''
 
+[tasks."changelog:commit"]
+alias = ["clc", "changelog:land"]
+description = "Commit a regenerated CHANGELOG.md under the canonical release message, on the default branch only. Pass --check to report without committing"
+run = '''
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+if [ "${usage_verbose:-false}" = "true" ]; then set -x; fi
+
+version="${usage_tag:?--tag is required, e.g. --tag v0.1.1}"
+
+# Yellow where a human is reading, a real annotation under Actions -- which is
+# how a warning renders yellow THERE, since the runner strips nothing but does
+# not group bare escape codes into the job summary. NO_COLOR is honoured because
+# a log captured without a terminal should not carry escape sequences.
+note() {
+    if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+        printf '::warning::%s\n' "$*"
+    elif [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
+        printf '\033[33m%s\033[0m\n' "$*" >&2
+    else
+        printf '%s\n' "$*" >&2
+    fi
+}
+
+# THE canonical message, and the whole reason this task exists rather than an
+# inline `git commit -m` in changelog.yml. Anything that has to RECOGNISE this
+# commit -- a cliff.toml commit_parser skipping it so the changelog does not
+# list "updated the changelog" as an entry -- needs a pattern matching this
+# literal, and a pattern in one file tracking a string in another drifts the
+# moment either moves. Defined once, here.
+#
+# `[skip ci]` is LOAD-BEARING, not belt-and-braces. GITHUB_TOKEN raises no
+# workflow-triggering event, but an app installation token and a PAT both do --
+# without the marker, landing this commit retriggers the release that generated
+# it, which releases again and lands another, without end.
+message="chore: update CHANGELOG.md for ${version} [skip ci]"
+
+file="${usage_file:-CHANGELOG.md}"
+[ -f "${file}" ] || { echo "changelog:commit: no ${file} to commit" >&2; exit 1; }
+
+# Scoped to the one file in BOTH the test and the staging. A bare `git diff`
+# would react to anything else dirty in the tree, and `git commit -a` would
+# sweep it into a commit meant to carry one generated file. This is also the
+# no-op guard: regenerating for a version already committed produces an
+# identical file and lands nothing.
+if git diff --quiet -- "${file}" && git diff --cached --quiet -- "${file}"; then
+    echo "changelog:commit: ${file} is already current for ${version}; nothing to commit"
+    exit 0
+fi
+
+git --no-pager diff -- "${file}"
+
+# BEFORE the --check block, not after. Checked the other way round, `--check` on
+# a feature branch reported "would commit" for a commit the branch guard below
+# was about to refuse -- a preview that contradicts the real run is worse than
+# no preview.
+#
+# The commit lands on the DEFAULT BRANCH or not at all. A changelog cut
+# elsewhere records a release that branch never shipped, and committing it there
+# would leave the release workflow pushing a file assembled from a ref nobody
+# released. Printing the message instead keeps the task useful as a local
+# rehearsal without making that call for the operator.
+#
+# Resolved from `origin/HEAD` rather than `gh repo view`: this runs on every
+# release, and a network round-trip to learn a name git already knows would make
+# the task fail offline for no gain. `main` only if the remote HEAD is unset.
+default_branch="${usage_branch:-}"
+if [ -z "${default_branch}" ]; then
+    default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+    default_branch="${default_branch#origin/}"
+fi
+: "${default_branch:=main}"
+
+current="$(git rev-parse --abbrev-ref HEAD)"
+if [ "${current}" != "${default_branch}" ]; then
+    note "changelog:commit: on '${current}', not the default branch '${default_branch}' -- NOT committed."
+    note "changelog:commit: the message would have been: ${message}"
+    exit 0
+fi
+
+if [ "${usage_check:-false}" = "true" ]; then
+    echo "changelog:commit: would commit the diff above as: ${message}"
+    exit 0
+fi
+
+# CONDITIONAL, and it has to be. A CI runner configures no identity, so
+# `git commit` there dies with "Author identity unknown" -- but setting one
+# unconditionally would rewrite a developer's own repo-local identity to the bot
+# the first time they ran this by hand. Absent means CI; present means leave it.
+#
+# `github-actions[bot]` regardless of which credential ends up pushing.
+# Authorship and authentication are separate in git: the author is metadata
+# written into the commit, the token decides only whether the push is accepted.
+# Pinning the author keeps `git log` reading the same across every release
+# instead of switching bots with whichever credential won. `41898282` is that
+# account's user id, and the `<id>+<name>@users.noreply` form is what links the
+# commit to it.
+if ! git config user.email >/dev/null 2>&1; then
+    git config user.name "github-actions[bot]"
+    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+fi
+
+git add -- "${file}"
+git commit -m "${message}"
+
+# NO `git push`. Landing a commit on the default branch is the release
+# workflow's decision and needs a credential this task has no business
+# resolving; a local `mise run changelog:land` that pushed to main would be a
+# footgun with no upside. The caller pushes.
+echo "changelog:commit: committed ${file} as: ${message}"
+'''
+shell = "bash -c"
+usage = '''
+flag "-v --verbose" help="Trace each command before running it (set -x)"
+flag "-t --tag <tag>" help="Version this changelog was cut at, as it appears in the message, e.g. v0.1.1"
+flag "--check" help="Show the diff and the message that would be used, without committing"
+flag "--file <file>" help="Commit somewhere other than CHANGELOG.md"
+flag "--branch <branch>" help="Branch the commit is allowed on (default: the remote HEAD, else main)"
+'''
+
 # The whole bump in one place: compute the next version, write it everywhere,
 # and render the changelog under that heading.
 #
