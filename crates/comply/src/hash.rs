@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Content digests used to match a file against a bundled license text.
+
 use std::fs;
 use std::io::Read;
 use std::path::Path;

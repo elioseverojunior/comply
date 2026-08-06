@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! The `LICENSES/` directory: which texts a project bundles, and which it needs.
+
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::Path;
@@ -177,6 +179,11 @@ impl LicenseDb {
         self.entries.len()
     }
 
+    /// Whether the project bundles no license text at all.
+    ///
+    /// Counts entries with text, so this stays true for a project whose
+    /// identifiers are all known but whose `LICENSES/` directory is missing --
+    /// which is the case worth reporting.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()

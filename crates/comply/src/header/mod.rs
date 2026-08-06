@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Reading, generating and writing SPDX headers.
+
 mod annotate;
 mod generate;
 mod parse;

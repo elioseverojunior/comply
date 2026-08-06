@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Project configuration: `REUSE.toml`, `.reuse/dep5` and `[tool.comply]`.
+
 use std::path::{Path, PathBuf};
 
 use crate::error::Error;

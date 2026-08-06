@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! The compliance verdict for a project, and how it is rendered.
+
 use std::collections::BTreeMap;
 
 use crate::license::LicenseAudit;

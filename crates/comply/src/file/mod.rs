@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Filesystem discovery: walking a project and classifying what it finds.
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +20,11 @@ mod classify;
 use classify::classify;
 pub use classify::is_ignored;
 
+/// How a discovered file can carry its licensing information.
+///
+/// This is what decides where a header goes, not whether the file is text: a
+/// binary needs the same annotation, it just cannot hold a comment, so it gets
+/// a `.license` companion instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
     /// Source file that can have inline SPDX headers.

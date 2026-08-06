@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! SPDX license expressions and the SPDX License List.
+
 use core::fmt;
 use std::collections::BTreeSet;
 
@@ -17,16 +19,32 @@ pub(crate) use spdx_list::{DEPRECATED_LICENSES, KNOWN_EXCEPTIONS, KNOWN_LICENSES
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression {
     /// A single license identifier, e.g. `MIT`
-    Simple { id: LicenseId },
+    Simple {
+        /// The identifier itself.
+        id: LicenseId,
+    },
     /// A license WITH exception, e.g. `Apache-2.0 WITH LLVM-exception`
     With {
+        /// The license the exception applies to.
         license: Box<Self>,
+        /// The exception identifier, drawn from the SPDX exception list rather
+        /// than the license list.
         exception: LicenseId,
     },
     /// Conjunction, e.g. `MIT AND Apache-2.0`
-    And { left: Box<Self>, right: Box<Self> },
+    And {
+        /// The left operand.
+        left: Box<Self>,
+        /// The right operand.
+        right: Box<Self>,
+    },
     /// Disjunction, e.g. `MIT OR Apache-2.0`
-    Or { left: Box<Self>, right: Box<Self> },
+    Or {
+        /// The left operand.
+        left: Box<Self>,
+        /// The right operand.
+        right: Box<Self>,
+    },
 }
 
 /// An SPDX license or exception identifier.
