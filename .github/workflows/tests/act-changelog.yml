@@ -1,0 +1,145 @@
+# SPDX-FileCopyrightText: COMPLY contributors
+#
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+run-name: ACT Changelog Tests
+name: ACT Changelog Tests
+
+concurrency:
+  group: act-tests-changelog-${{ github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+# NO `pull_request` trigger, unlike the other act tests here. changelog.yml
+# self-gates on `github.ref_name == default_branch`, and on a pull request that
+# is `<n>/merge` -- so a PR run could only ever assert that the workflow skipped,
+# which is not a test of anything. Push-to-main and manual dispatch are the two
+# events where the call actually executes.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+env:
+  # mise.toml's [env] does `GITHUB_TOKEN = {{env.GITHUB_TOKEN | default(value='')}}`,
+  # so with nothing set it exports an EMPTY token -- worse than unset, since any
+  # tool that reads it then makes unauthenticated, rate-limited API calls.
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+
+jobs:
+  # A JOB-level `uses:`, not a step. A step's `uses:` resolves to an ACTION -- a
+  # directory holding an action.yml -- so pointing one at a workflow file leaves
+  # act unable to classify the step at all. Calling a reusable workflow is job
+  # syntax, and it is also what gives the caller `needs.<job>.outputs`, which is
+  # what the assertions below read.
+  changelog:
+    name: Changelog
+    uses: ./.github/workflows/changelog.yml
+    with:
+      # NON-NEGOTIABLE. `dry-run: false` here would make a local act run push a
+      # real commit to the real `main` -- changelog.yml checks out the default
+      # branch by name, so there is no local-only sandbox protecting it. The
+      # value is also the assertion target: `committed` must come back false.
+      dry-run: true
+      # NO `version`. Omitting it exercises the resolver, which is the part with
+      # a failure mode worth catching (see the tag-shape assertion below).
+      # Passing one would test only that the input is echoed.
+    secrets: inherit
+
+  tests:
+    name: Tests
+    needs: [changelog]
+    # `always()` so a SKIPPED call reaches the assertions instead of silently
+    # skipping them too. A test job that vanishes with its subject reports green
+    # for a run that verified nothing.
+    if: always()
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    steps:
+      # Two steps, because a YAML key cannot be conditionally omitted. act
+      # substitutes its copy-the-working-tree shortcut only for a checkout
+      # carrying no `ref`/`token`; given either it runs the real action, which
+      # fetches from GitHub and dies with `upload-pack: not our ref` on any
+      # commit not yet pushed -- every commit worth testing locally.
+      #
+      # `!= 'true'` rather than `== 'false'`: the variable is unset on GitHub,
+      # where `'' == 'false'` is also false, which would have taken the act path
+      # in the one place the real checkout is required. `mise run act:setup`
+      # writes ACT=true into `.act/.vars`.
+      - name: Checkout
+        if: ${{ vars.ACT != 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: "true"
+          token: ${{ secrets.GITHUB_TOKEN || github.token }}
+
+      - name: Checkout (act copies the working tree)
+        if: ${{ vars.ACT == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Assert changelog contract
+        env:
+          RESULT: ${{ needs.changelog.result }}
+          VERSION: ${{ needs.changelog.outputs.version }}
+          COMMITTED: ${{ needs.changelog.outputs.committed }}
+        run: |
+          set -Eeuo pipefail
+
+          fail() { echo "::error::$*"; exit 1; }
+
+          printf 'result    = %s\nversion   = %s\ncommitted = %s\n' \
+            "${RESULT}" "${VERSION}" "${COMMITTED}"
+
+          # A skip is a legitimate runtime behaviour and an illegitimate test
+          # outcome -- nothing was exercised, so it cannot pass.
+          case "${RESULT}" in
+            success) ;;
+            skipped) fail "changelog.yml skipped: it only runs on the default branch. Run this from main." ;;
+            *) fail "changelog.yml result was '${RESULT}'" ;;
+          esac
+
+          # THE CREDENTIAL-FALLBACK REGRESSION GUARD, and the reason a green run
+          # here means something. Neither APP_CLIENT_ID nor APP_PRIVATE_KEY
+          # exists under act, so `Mint app token` must SKIP. If its `if:` guard
+          # is ever dropped -- or rewritten as `continue-on-error` -- the action
+          # fails on the missing private key, the called job fails, and RESULT
+          # above is 'failure'. Reaching this line proves the chain degraded to
+          # github.token instead of erroring.
+          echo "Credential fallback held: the call succeeded with no app configured."
+
+          # `record` runs on every path out of the commit step, so an empty
+          # value means a path was added without one.
+          [ -n "${COMMITTED}" ] || fail "committed output is empty: a commit-step exit path does not call record()"
+
+          # THE SAFETY ASSERTION. A dry run that commits is the one failure mode
+          # that cannot be undone by re-running the test.
+          [ "${COMMITTED}" = "false" ] \
+            || fail "dry-run produced committed='${COMMITTED}'; a dry run must never commit"
+
+          # A plain X.Y.Z, matching cliff.toml's tag_pattern. The resolver picks
+          # from three coexisting tag shapes -- v0.1.1 (release), v0.1.1-13
+          # (per-commit SemVer marker) and v0.1 / v0 (floating pointers) -- and
+          # picking a marker cuts the changelog under a heading no release, tag
+          # link or crates.io version ever uses.
+          printf '%s' "${VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || fail "version must be a plain X.Y.Z release tag, got '${VERSION}'"
+
+          # An INDEPENDENT oracle: re-deriving the newest tag here would repeat
+          # the resolver's own logic and share its bugs, so this asks a
+          # different question -- does the version it chose name a tag that
+          # exists at all?
+          if [ -n "$(git tag -l 2>/dev/null)" ]; then
+            git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
+              || fail "resolved v${VERSION} but no such tag exists"
+            echo "v${VERSION} is a real tag."
+          else
+            # Visible rather than silent: act's working-tree copy does not
+            # always carry tags, and a check that quietly did not run reads
+            # exactly like a check that passed.
+            echo "::warning::No tags in this checkout; skipped the tag-existence assertion."
+          fi
+
+          echo "All changelog contract assertions passed."
