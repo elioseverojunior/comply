@@ -20,8 +20,10 @@ on:
   branch_protection_rule:
   workflow_dispatch:
 
-# Top-level read-all; jobs that upload results need additional write permissions.
-permissions: read-all
+# Read-only at the top level, so a job added later inherits no write it did not
+# ask for. Jobs that upload results declare their own writes below.
+permissions:
+  contents: read
 
 jobs:
   analysis:

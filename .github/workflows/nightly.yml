@@ -18,8 +18,8 @@ on:
 # it. The constraint for the `bench` job's reusable-workflow call is that
 # performance.yml's permissions be a subset of that JOB's -- which they are,
 # both being `contents: write` -- not a subset of this workflow-level key.
-# performance.yml itself uses the same shape: `read-all` on top, `contents:
-# write` on the job that needs it.
+# performance.yml itself uses the same shape: `contents: read` on top, with the
+# writes on the job that needs them.
 #
 # This was briefly `contents: write` here, on the theory that the top level
 # capped the job and caused nightly's `startup_failure`. That theory is

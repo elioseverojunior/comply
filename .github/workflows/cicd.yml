@@ -21,7 +21,8 @@ on:
         type: boolean
         default: false
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -162,7 +163,7 @@ jobs:
     needs: [lint, sast]
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     permissions:
-      actions: write
+      actions: read
       contents: read
     steps:
       - name: Checkout
