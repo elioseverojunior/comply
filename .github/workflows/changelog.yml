@@ -32,6 +32,13 @@ on:
         required: false
         type: boolean
         default: true
+    outputs:
+      version:
+        description: "Release version the changelog was cut at, without the leading v"
+        value: ${{ jobs.changelog.outputs.version }}
+      committed:
+        description: "'true' only when a commit was pushed; 'false' for a dry run or an already-current file"
+        value: ${{ jobs.changelog.outputs.committed }}
 
 # NOT `read-all`. This workflow is CALLED, and a called workflow cannot request
 # more than the calling JOB grants. `read-all` expands to read on every scope
@@ -52,7 +59,49 @@ jobs:
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      committed: ${{ steps.commit.outputs.committed }}
+    env:
+      # `secrets` is NOT a context a step-level `if:` can read -- referencing it
+      # there fails the workflow with "Unrecognized named-value: 'secrets'".
+      # Job-level `env` can read it and `env` IS readable from `if:`, so the
+      # presence test is computed once here and consumed as a plain string
+      # below. Comparing against '' keeps the key itself out of the
+      # environment: what lands in HAS_APP is only "true" or "false".
+      HAS_APP: ${{ vars.APP_CLIENT_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
     steps:
+      # An installation token: minted per run, expires in an hour, revoked when
+      # the job ends. `if:` rather than `continue-on-error:` -- the action
+      # treats a missing private key as a hard failure, so without the guard a
+      # repository that has no app configured could not run this job at all.
+      # Skipped leaves `steps.app-token.outputs.token` as '', which is exactly
+      # what the `||` chain below needs to fall through.
+      #
+      # `client-id`, not `app-id`: the action marks `app-id` deprecated with
+      # "Use 'client-id' instead". The client ID is a repository VARIABLE and
+      # not a secret -- it identifies the app, it does not authenticate as one.
+      - name: Mint app token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # Narrower than the installation itself. An installation token
+          # otherwise carries every permission the app was granted, and this
+          # job commits one generated file.
+          #
+          # This CANNOT scope UP. Requesting a level above what the installation
+          # holds is rejected with 422 "The level of access for permissions
+          # requested are not granted to this installation", so the app must be
+          # defined with Contents: Read and write AND the installation must have
+          # accepted that permission change -- GitHub does not apply a widened
+          # permission until it is approved on the installation itself. Failing
+          # here is deliberate: it names the cause, where a read-only token
+          # would instead mint cleanly and die later on an opaque 403 at push.
+          permission-contents: write
+
       # Checks out the DEFAULT BRANCH, not the triggering ref: this commit lands
       # on main. Full history and tags, because git-cliff derives every section
       # of the changelog from them.
@@ -62,7 +111,34 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           fetch-tags: "true"
-          token: ${{ secrets.GITHUB_TOKEN || github.token }}
+          # actions/checkout PERSISTS this credential, so whatever is chosen
+          # here is also what the push at the end of the job authenticates as.
+          # Two rungs, deliberately -- no personal access token:
+          #
+          #   app token    short-lived, scoped, revoked when the job ends. The
+          #                only rung that can reach a protected `main`, and only
+          #                once the app is a ruleset BYPASS ACTOR (see below).
+          #   github.token always present, so the chain never evaluates to empty
+          #                and a read-only or dry run still checks out. It
+          #                cannot push to `main` and is not meant to.
+          #
+          # `secrets.GITHUB_TOKEN` is deliberately NOT a rung. GitHub injects it
+          # automatically -- the reserved `GITHUB_`/`GH_` prefixes stop you
+          # CREATING one, not GitHub providing it -- but it holds the identical
+          # value to `github.token`, so it could only ever be a rung that never
+          # changes the outcome.
+          #
+          # PREREQUISITE, because dropping the PAT removed the rung that worked
+          # by ADMIN exemption: `main` must be governed by a RULESET listing
+          # this app as a bypass actor. Classic branch protection cannot express
+          # that -- its sole exemption is `enforce_admins: false`, which waives
+          # rules for repository ADMINS, and an installation token authenticates
+          # as `comply[bot]`, which is not one however the app is permissioned
+          # (`restrictions` is a push allowlist, not a waiver). The two systems
+          # are also evaluated INDEPENDENTLY, so the classic rule has to be
+          # deleted rather than left alongside, or it rejects the push whatever
+          # the ruleset permits.
+          token: ${{ steps.app-token.outputs.token || github.token }}
 
       # Provides mise and, through it, git-cliff -- the same task the rest of the
       # repository uses, so the tool and its config live in one place.
@@ -119,13 +195,24 @@ jobs:
           echo "Cutting CHANGELOG.md at v${resolved} (newest tag: ${newest:-none})"
 
       - name: Commit CHANGELOG.md
+        id: commit
         shell: bash
         env:
           VERSION: v${{ steps.resolve.outputs.version }}
           BRANCH: ${{ github.event.repository.default_branch }}
           DRY_RUN: ${{ inputs.dry-run }}
+          # Presence only -- comparing against '' yields the string "true" or
+          # "false" and never puts the token itself in the environment. The app
+          # token is now the ONLY rung that can push, so its absence is the
+          # whole test.
+          HAS_PUSH_TOKEN: ${{ steps.app-token.outputs.token != '' }}
         run: |
           set -Eeuo pipefail
+
+          # Recorded at EVERY exit, because the three ways this step declines to
+          # commit are not the same thing to a caller: an unset output cannot
+          # distinguish "the file was already current" from "the job never ran".
+          record() { echo "committed=$1" >> "$GITHUB_OUTPUT"; }
 
           echo "::group::Generating CHANGELOG.md for ${VERSION}"
           # NO `--latest`. That selector emits a SINGLE release section, so
@@ -152,6 +239,7 @@ jobs:
           # version produces an identical file and commits nothing.
           if git diff --quiet -- CHANGELOG.md; then
             echo "CHANGELOG.md is already current for ${VERSION}; nothing to commit"
+            record false
             exit 0
           fi
 
@@ -159,20 +247,43 @@ jobs:
 
           if [ "${DRY_RUN}" = "true" ]; then
             echo "Dry run: the diff above would be committed to ${BRANCH} as ${VERSION}"
+            record false
             exit 0
+          fi
+
+          # Checked BEFORE the push so the failure names its own cause. Without
+          # it the job dies on a GH006 wall listing every protection violation
+          # at once, which reads as "the branch rules are wrong" when the real
+          # answer is "this run holds no token that may write to the default
+          # branch". See the Checkout step for why GITHUB_TOKEN cannot be it.
+          if [ "${HAS_PUSH_TOKEN}" != "true" ]; then
+            echo "::error::No app token was minted, so this push would fall back to GITHUB_TOKEN and be rejected by branch protection (GH006). Set the APP_CLIENT_ID variable and the APP_PRIVATE_KEY secret, and confirm the app is installed on this repository with Contents: write."
+            exit 1
           fi
 
           # Nothing else in this job configures an identity, so `git commit`
           # would fail with "Author identity unknown".
+          #
+          # `github-actions[bot]` even though the app token is what
+          # authenticates the push. Authorship and authentication are separate
+          # in git: the author is metadata written into the commit, the token
+          # decides only whether the push is allowed. Pinning the author keeps
+          # `git log` reading the same across every release rather than
+          # switching bots with whichever rung happened to win. `41898282` is
+          # that account's user id, and the `<id>+<name>@users.noreply` form is
+          # what links the commit to it.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add CHANGELOG.md
-          # `[skip ci]` is belt-and-braces: this push uses GITHUB_TOKEN, and
-          # GitHub raises no workflow-triggering event for that token, so it
-          # cannot retrigger anything. The marker is what still holds if the
-          # token is ever swapped for a PAT.
+          # `[skip ci]` is LOAD-BEARING now, not belt-and-braces. GITHUB_TOKEN
+          # raises no workflow-triggering event, so the marker was previously
+          # insurance -- but both privileged rungs DO raise one, an app
+          # installation token no less than a PAT. Without this, landing the
+          # changelog retriggers cicd.yml, which releases again and pushes
+          # another changelog, without end.
           git commit -m "chore: update CHANGELOG.md for ${VERSION} [skip ci]"
           git push origin "HEAD:${BRANCH}"
+          record true
           echo "CHANGELOG.md committed to ${BRANCH}"
           echo "::endgroup::"
