@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Editing `REUSE.toml` annotations in place.
+
 use crate::error::Error;
 
 /// Merge an annotation for `paths` into `content`, returning the new content.

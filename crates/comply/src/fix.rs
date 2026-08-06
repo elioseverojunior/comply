@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Writing missing licensing information back to a project.
+
 use std::fs;
 use std::path::Path;
 
@@ -29,14 +31,20 @@ pub enum FixAction {
 /// Result of fixing a project
 #[derive(Debug, Clone, Default)]
 pub struct FixReport {
+    /// What happened to each file, in the order the walk reached it.
     pub actions: Vec<(String, FixAction)>,
+    /// Files considered, whether or not they changed.
     pub total: usize,
+    /// Files that gained licensing information.
     pub fixed: usize,
+    /// Files already compliant, left untouched.
     pub unchanged: usize,
+    /// Files that could not be fixed; each carries its reason in `actions`.
     pub failed: usize,
 }
 
 impl FixReport {
+    /// An empty report, before any file has been considered.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -48,6 +56,10 @@ impl FixReport {
         }
     }
 
+    /// Record what happened to one file and fold it into the counts.
+    ///
+    /// Every action other than `Unchanged` and `Failed` counts as fixed, so a
+    /// new variant is treated as a change unless it is added to the match.
     pub fn add(&mut self, path: String, action: FixAction) {
         self.total += 1;
         match &action {
@@ -58,6 +70,11 @@ impl FixReport {
         self.actions.push((path, action));
     }
 
+    /// Whether the run neither changed nor failed anything.
+    ///
+    /// False after a successful fix, not just after a failure -- a caller
+    /// wanting "did this project already comply" gets that only from a run
+    /// that had nothing to do.
     #[must_use]
     pub const fn is_clean(&self) -> bool {
         self.failed == 0 && self.fixed == 0
