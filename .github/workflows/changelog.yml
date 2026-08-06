@@ -261,28 +261,18 @@ jobs:
             exit 1
           fi
 
-          # Nothing else in this job configures an identity, so `git commit`
-          # would fail with "Author identity unknown".
+          # The identity, the message and its `[skip ci]` marker all live in the
+          # mise task. A message literal HERE plus a cliff.toml commit_parser
+          # matching it is exactly the pair that drifts -- one moves, the other
+          # silently stops matching, and the changelog starts listing its own
+          # maintenance commits.
           #
-          # `github-actions[bot]` even though the app token is what
-          # authenticates the push. Authorship and authentication are separate
-          # in git: the author is metadata written into the commit, the token
-          # decides only whether the push is allowed. Pinning the author keeps
-          # `git log` reading the same across every release rather than
-          # switching bots with whichever rung happened to win. `41898282` is
-          # that account's user id, and the `<id>+<name>@users.noreply` form is
-          # what links the commit to it.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # `--branch` is passed rather than left to the task's `origin/HEAD`
+          # lookup: actions/checkout does not set the remote HEAD ref, so the
+          # task would fall through to its hardcoded `main` and be guessing on
+          # any repository whose default branch is named anything else.
+          mise run changelog:commit --tag "${VERSION}" --branch "${BRANCH}"
 
-          git add CHANGELOG.md
-          # `[skip ci]` is LOAD-BEARING now, not belt-and-braces. GITHUB_TOKEN
-          # raises no workflow-triggering event, so the marker was previously
-          # insurance -- but both privileged rungs DO raise one, an app
-          # installation token no less than a PAT. Without this, landing the
-          # changelog retriggers cicd.yml, which releases again and pushes
-          # another changelog, without end.
-          git commit -m "chore: update CHANGELOG.md for ${VERSION} [skip ci]"
           git push origin "HEAD:${BRANCH}"
           record true
           echo "CHANGELOG.md committed to ${BRANCH}"
