@@ -17,14 +17,14 @@ jobs:
     name: Label by files
     runs-on: ${{ vars.RUNS_ON_ARM64 || vars.RUNS_ON || 'ubuntu-latest' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: "recursive"
-          fetch-depth: 0
-          fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
-
+      # NO checkout, and adding one is a vulnerability rather than a
+      # convenience: this workflow triggers on `pull_request_target`, which runs
+      # with the base repository's secrets and `pull-requests: write`, so any
+      # step that places PR-authored content on the runner hands that privilege
+      # to the PR author. actions/labeler needs nothing checked out -- when the
+      # configuration file is absent from the runner it reads
+      # `.github/labeler.yml` from the base repository over the API, which is
+      # the trusted copy by construction.
       - name: Label PR based on file paths
         uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
         with:
