@@ -30,6 +30,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  REPO_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
 
 jobs:
   fuzz:
@@ -44,7 +45,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
           token: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       # Via setup-rust-env, not the toolchain action directly: that path also

@@ -31,6 +31,7 @@ env:
   # so with nothing set it exports an EMPTY token -- worse than unset, since any
   # tool that reads it then makes unauthenticated, rate-limited API calls.
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+  REPO_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
 
 jobs:
   # Tests and coverage are one job because they are one command: tarpaulin
@@ -64,7 +65,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
           token: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       - name: Checkout (act copies the working tree)

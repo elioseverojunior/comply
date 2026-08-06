@@ -39,6 +39,7 @@ env:
   # tool that reads it then makes unauthenticated, rate-limited API calls.
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
   GITVERSION_SPEC: ${{ vars.GITVERSION_SPEC || '6.x' }}
+  REPO_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
 
 jobs:
   # ──────────────────────────────────────────────
@@ -54,7 +55,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-rust-env
@@ -103,7 +104,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-rust-env
@@ -129,7 +130,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-rust-env
@@ -172,7 +173,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
           token: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       # llvm-tools, which tarpaulin's llvm engine needs to instrument doctests,
@@ -254,7 +255,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-rust-env
@@ -403,7 +404,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-rust-env

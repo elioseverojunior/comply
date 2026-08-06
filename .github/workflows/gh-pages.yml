@@ -90,6 +90,7 @@ env:
   # setup-bun, and installing the workspace's Rust tools would cost minutes in a
   # job that never touches a crate.
   MISE_TASK_RUN_AUTO_INSTALL: false
+  REPO_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
 
 jobs:
   build:
@@ -111,7 +112,7 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
           fetch-tags: "true"
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ env.REPO_REF }}
           token: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       - name: GitHub Actions Bot Configuration
