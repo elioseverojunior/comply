@@ -1816,7 +1816,25 @@ if [ "${usage_verbose:-false}" = "true" ]; then set -x; fi
 # AND-OR list whose test fails returns 1 as a statement and kills the task, so
 # the terse form would abort the moment any flag was left off.
 args=()
-if [ -n "${usage_tag:-}" ]; then args+=(--tag "$usage_tag"); fi
+# `--tag` INVENTS a release out of whatever is unreleased, so naming a tag that
+# ALREADY EXISTS renders that version twice -- once as the real release, once as
+# the invented one -- and stamps both with the generation time rather than the
+# release's own date. Verified on v0.1.1 with commits past the tag: two
+# `## [0.1.1]` headings, and the genuine 2026-08-04 rewritten to whatever day
+# the command happened to run. The dispatch path in changelog.yml resolves the
+# NEWEST EXISTING tag, and the changelog commit it lands is itself a commit past
+# that tag, so this fires on every manual run rather than in some corner case.
+#
+# Dropping the flag lets git-cliff date the release from its tagged commit,
+# which also makes the output a pure function of history: same commits in, same
+# bytes out, regardless of when it runs.
+if [ -n "${usage_tag:-}" ]; then
+    if git rev-parse -q --verify "refs/tags/${usage_tag}" >/dev/null; then
+        echo "changelog: ${usage_tag} already exists; omitting --tag so its date comes from git" >&2
+    else
+        args+=(--tag "$usage_tag")
+    fi
+fi
 if [ "${usage_unreleased:-false}" = "true" ]; then args+=(--unreleased); fi
 if [ "${usage_latest:-false}" = "true" ]; then args+=(--latest); fi
 if [ -n "${usage_strip:-}" ]; then args+=(--strip "$usage_strip"); fi
