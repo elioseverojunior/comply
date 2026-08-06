@@ -19,7 +19,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   # mise.toml's [env] does `GITHUB_TOKEN = {{env.GITHUB_TOKEN | default(value='')}}`,
@@ -35,6 +36,13 @@ jobs:
   # what the assertions below read.
   changelog:
     name: Changelog
+    # REQUIRED, and the workflow-level default does not supply it: a called
+    # workflow cannot request more than the calling JOB grants, and
+    # changelog.yml's job asks for `contents: write`. Without this the call is
+    # rejected before it starts. publish.yml declares the same block at its own
+    # call site for the same reason.
+    permissions:
+      contents: write
     uses: ./.github/workflows/changelog.yml
     with:
       # NON-NEGOTIABLE. `dry-run: false` here would make a local act run push a
