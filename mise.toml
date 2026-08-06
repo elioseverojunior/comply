@@ -2970,8 +2970,7 @@ GH_PAGER= gh api -X PUT "repos/${repo}/branches/${branch}/protection" \
     "required_status_checks": {
         "strict": true,
         "contexts": [
-            "CI",
-            "Mise"
+            "CICD"
         ]
     },
     "enforce_admins": false,
