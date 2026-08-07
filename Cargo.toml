@@ -19,7 +19,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/elioseverojunior/comply"
 rust-version = "1.95"
-version = "0.1.1"
+version = "0.2.0"
 
 [workspace.lints.rust]
 rust_2018_idioms = { level = "warn", priority = -1 }
@@ -66,7 +66,7 @@ clap = { version = ">=4.6,<5.0.0", features = ["derive"] }
 # a dependency but never narrow it, and narrowing is a no-op rather than an
 # error. Written here it holds, which is what keeps clap and anyhow out of
 # `comply-wasm`'s browser bundle.
-comply = { path = "crates/comply", version = "0.1.1", default-features = false }
+comply = { path = "crates/comply", version = "0.2.0", default-features = false }
 ignore = { version = ">=0.4,<1.0.0" }
 regex = { version = ">=1.13,<2.0.0" }
 serde = { version = ">=1.0,<2.0.0", features = ["derive"] }
